@@ -18,17 +18,28 @@ if [ ! -f "$REPO_ROOT/.env" ]; then
     echo ""
 fi
 
-# Create symlinks for all items in skills/ (except export.sh)
+# Create symlinks for all items in skills/ (except export.sh and package.json)
 for item in "$SKILLS_SOURCE"/*; do
     basename_item=$(basename "$item")
 
-    # Skip export.sh itself
-    if [ "$basename_item" = "export.sh" ]; then
+    # Skip if item is a symlink (prevents recursive linking)
+    if [ -L "$item" ]; then
         continue
     fi
 
+    # Skip export.sh and package.json
+    if [ "$basename_item" = "export.sh" ] || [ "$basename_item" = "package.json" ]; then
+        continue
+    fi
+
+    # Remove existing symlink/file if it exists to prevent nested symlinks
+    target_path="$SKILLS_TARGET/$basename_item"
+    if [ -e "$target_path" ] || [ -L "$target_path" ]; then
+        rm -rf "$target_path"
+    fi
+
     # Create symlink
-    ln -sf "$item" "$SKILLS_TARGET/$basename_item"
+    ln -s "$item" "$SKILLS_TARGET/$basename_item"
     echo "Linked: $basename_item"
 done
 
