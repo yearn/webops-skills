@@ -1,0 +1,16 @@
+{
+  "name": "find-create-block",
+  "version": "1.0.0",
+  "description": "Estimate contract creation block using binary search on RPC",
+  "type": "module",
+  "scripts": {
+    "find": "bun run find-create-block.ts"
+  },
+  "dependencies": {
+    "viem": "^2.21.54",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1"
+  }
+}

@@ -8,6 +8,16 @@ SKILLS_TARGET="$HOME/.claude/skills"
 # Create target directory if it doesn't exist
 mkdir -p "$SKILLS_TARGET"
 
+# Check if .env file exists in repo root
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+if [ ! -f "$REPO_ROOT/.env" ]; then
+    echo "⚠️  WARNING: No .env file found at $REPO_ROOT/.env"
+    echo "   Some skills require RPC configuration to function."
+    echo "   Copy .env.example and configure your RPC endpoints:"
+    echo "   cp $REPO_ROOT/.env.example $REPO_ROOT/.env"
+    echo ""
+fi
+
 # Create symlinks for all items in skills/ (except export.sh)
 for item in "$SKILLS_SOURCE"/*; do
     basename_item=$(basename "$item")

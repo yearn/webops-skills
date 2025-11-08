@@ -1,0 +1,9 @@
+{
+  "name": "webops",
+  "version": "1.0.0",
+  "description": "Webops development workspace",
+  "private": true,
+  "scripts": {
+    "install-skills": "for dir in skills/*/; do [ -f \"$dir/package.json\" ] && (cd \"$dir\" && echo \"Installing deps for $dir...\" && bun install) || true; done && ./skills/export.sh"
+  }
+}
