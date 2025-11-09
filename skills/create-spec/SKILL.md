@@ -1,3 +1,8 @@
+---
+name: create-spec
+description: guide the creation of comprehensive work specifications for new features, changes, or technical implementations
+---
+
 # Create Spec Skill
 
 This skill guides the creation of comprehensive work specifications for new features, changes, or technical implementations.
