@@ -50,6 +50,9 @@ Evaluates npm packages against the dependency policy before adding them.
 #### commit-guide
 Guidelines for composing git commit titles and bodies following project standards.
 
+#### create-spec
+Helps create comprehensive work specifications for new features or changes using a structured template. Guides through requirement gathering, codebase research, and generates detailed specs with tasks, acceptance criteria, and technical notes.
+
 #### pr-guide
 Guide for composing pull request titles and descriptions (placeholder).
 
