@@ -140,7 +140,7 @@ Create a new markdown file with the spec. Use this template structure:
 ### 6. Save and Confirm
 
 - Ask the user where they want to save the spec file
-- Default location: `specs/[descriptive-name].md` or `.global/specs/[descriptive-name].md`
+- Default location: `specs/[descriptive-name].md`
 - After creating the file, summarize the key points and ask if any sections need refinement
 
 ## Example Usage
