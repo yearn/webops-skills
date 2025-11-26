@@ -11,21 +11,7 @@ Use this skill when:
 
 ## Prerequisites
 
-1. **Install dependencies**
-   ```bash
-   cd ~/git/webops
-   bun run install-skills
-   ```
-
-2. **Configure archive node RPC endpoints**
-   Copy `.env.example` to `.env` and add your archive node RPC URLs:
-   ```bash
-   cp ~/git/webops/.env.example ~/git/webops/.env
-   ```
-
-   Edit `.env` with format: `ARCHIVE_NODE_[CHAIN_ID]=[ARCHIVE_NODE_RPC_URL]`
-
-   **Note:** Archive nodes are required for historical state queries (`eth_getCode` at past blocks)
+Requires archive node RPC configured in `~/git/webops/.env`. See [README](../../README.md) for setup.
 
 ## Usage
 

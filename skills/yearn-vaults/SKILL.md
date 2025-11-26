@@ -23,6 +23,10 @@ Reference these repositories for ground truth when answering questions about Yea
 5. Read source files to provide accurate answers
 6. Always cite specific files and line numbers in responses
 
+## Optional: Archive Node
+
+For questions requiring onchain data (not just code/docs), configure archive node RPC in `~/git/webops/.env`. See [README](../../README.md) for setup.
+
 ## Quick Reference
 
 The `references.md` file contains:

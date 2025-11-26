@@ -29,20 +29,12 @@ This repository includes custom skills for [Claude Code](https://claude.com/clau
    # Edit .env and add your archive node RPC URLs
    ```
 
+   Skills that query historical blockchain state load archive node RPCs from the root `.env` using the format `ARCHIVE_NODE_[CHAIN_ID]` (e.g., `ARCHIVE_NODE_1` for Ethereum, `ARCHIVE_NODE_8453` for Base).
+
 ### Available Skills
 
 #### find-create-block
 Estimates contract creation block using binary search on archive node RPC.
-
-**Usage:**
-```bash
-bun run skills/find-create-block/find-create-block.ts <chainId> <address>
-```
-
-**Example:**
-```bash
-bun run skills/find-create-block/find-create-block.ts 1 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
-```
 
 #### npm-policy
 Evaluates npm packages against the dependency policy before adding them.
