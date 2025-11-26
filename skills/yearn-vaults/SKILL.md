@@ -25,7 +25,11 @@ Reference these repositories for ground truth when answering questions about Yea
 
 ## Optional: Archive Node
 
-For questions requiring onchain data (not just code/docs), configure archive node RPC in `~/git/webops/.env`. See [README](../../README.md) for setup.
+For questions requiring onchain data (not just code/docs) you have two options:
+- the archive node RPCs in `~/git/webops/.env`. See [README](../../README.md) for setup
+- the etherscan key in `~/git/webops/.env`
+
+use whichever is most appropriate
 
 ## Quick Reference
 
