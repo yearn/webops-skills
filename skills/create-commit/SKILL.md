@@ -1,5 +1,5 @@
 ---
-name: commit-guide
+name: create-commit
 description: guide for composing git commit titles and bodies following project standards
 ---
 
