@@ -54,6 +54,9 @@ Guide for composing pull request titles and descriptions (placeholder).
 #### standup-report
 Generate git-based reports for standup meetings (placeholder).
 
+#### yearn-branding
+Add Yearn brand assets (logo, favicon) to projects. Sources from presskit.yearn.fi.
+
 ---
 
 **Note:** This repository is private and intended for internal Yearn Finance WebOps team use only.
