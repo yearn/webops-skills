@@ -1,5 +1,5 @@
 ---
-name: pr-guide
+name: create-pr
 description: guide for composing pull request titles and descriptions following project standards
 ---
 
@@ -29,6 +29,8 @@ Write a clear, concise title that summarizes the change in a sentence fragment. 
 ### Summary
 <minimum 1–2 sentences: what changed and why?>
 
+Closes #<issue number> (optional — include if this PR resolves a tracked issue)
+
 ### How to review
 <What should the reviewer look at first?
 Any specific files/flows to ignore?
@@ -45,6 +47,7 @@ Any feature flags, kill switches, or easy rollback steps?>
 
 ## Guidelines
 
+- **Closing issues**: If the PR resolves a GitHub issue, include `Closes #<number>` in the summary. This auto-closes the issue when the PR merges. If no issue number is known from context, ask the user if there's a related issue to link.
 - **Summary**: Be concise but complete. Explain both what changed and why.
 - **How to review**: Help reviewers focus their attention. Mention key files, suggest a review order, or note anything that can be skipped.
 - **Test plan**: Include concrete steps. For manual testing, specify environment or special setup. For automated tests, list the commands or test names.
