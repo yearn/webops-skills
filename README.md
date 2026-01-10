@@ -39,7 +39,7 @@ Estimates contract creation block using binary search on archive node RPC.
 #### npm-policy
 Evaluates npm packages against the dependency policy before adding them.
 
-#### commit-guide
+#### create-commit
 Guidelines for composing git commit titles and bodies following project standards.
 
 #### create-skill
@@ -48,7 +48,7 @@ Create new Claude Code skills following the standard format. Guides through requ
 #### create-spec
 Helps create comprehensive work specifications for new features or changes using a structured template. Guides through requirement gathering, codebase research, and generates detailed specs with tasks, acceptance criteria, and technical notes.
 
-#### pr-guide
+#### create-pr
 Guide for composing pull request titles and descriptions (placeholder).
 
 #### standup-report
