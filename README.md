@@ -30,6 +30,7 @@ Custom skills for [Claude Code](https://claude.com/claude-code) used by the WebO
 | `create-skill` | Create new Claude Code skills |
 | `create-spec` | Create work specifications for features |
 | `implement-spec` | Implement a spec from GitHub issue or file |
+| `ship-spec` | Orchestrate full dev cycle: spec → implement → PR → review |
 | `standup-report` | Generate git-based standup reports |
 | `yearn-branding` | Add Yearn brand assets to projects |
 | `yearn-vaults` | Query Yearn vault system documentation |
