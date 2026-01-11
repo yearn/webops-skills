@@ -8,14 +8,21 @@ Use this skill when:
 - A new npm dependency is being added to the project
 - Evaluating whether to add a specific package
 - Requesting a policy score for a specific npm package
+- Auditing all dependencies in a project
 
-## Policy Application
-When activated, apply the NPM dependency policy located at:
-`~/git/webops/docs/npm-dependency-policy/index.md`
+## Policy Reference
+Read the full policy at: `~/.claude/skills/npm-policy/policy.md`
+
+## Ignore List
+Check for `.webopsignore` in the local project root. If it exists, look for:
+```
+npm-dependencies: package-a, package-b, package-c
+```
+Skip any packages listed there during audits.
 
 ## Workflow
 
-1. **Identify the package** being considered (name and version if specified)
+1. **Identify the package(s)** being considered (name and version if specified)
 
 2. **Check if we can avoid it** (Decision Framework Step 1)
    - Can this be done with native features?
@@ -23,12 +30,15 @@ When activated, apply the NPM dependency policy located at:
    - Can a teammate write this quickly?
 
 3. **Evaluate size & performance** (Step 2)
-   - Fetch bundle size from bundlephobia.com API
-   - Compare against thresholds (100kb utilities, 150kb UI, 250kb frameworks)
+   - Fetch bundle size from bundlephobia.com API: `https://bundlephobia.com/api/size?package=name@version`
+   - Compare against thresholds:
+     - Utilities: >100kb
+     - UI libraries: >150kb
+     - Frameworks/SDKs: >250kb
    - Check for tree-shaking support
 
 4. **Check maintenance signals** (Step 3)
-   - Last updated date
+   - Last updated date (should be within 6 months)
    - GitHub activity
    - Number of maintainers
 
@@ -42,4 +52,6 @@ When activated, apply the NPM dependency policy located at:
    - Alternative suggestions if rejecting
 
 ## Output Format
-Provide a structured evaluation covering all decision framework points with a clear final recommendation.
+For full project audits, follow the format in: `~/.claude/skills/npm-policy/output-example.md`
+
+For single package evaluations, provide a structured evaluation covering all decision framework points with a clear final recommendation.
