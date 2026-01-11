@@ -32,6 +32,12 @@ Custom skills for [Claude Code](https://claude.com/claude-code) used by the WebO
 
    > **Important:** Delete your token when you're done with your work session.
 
+4. **Install MCP servers (required for GitHub and browser automation skills):**
+   ```bash
+   claude mcp add-json github '{"type":"http","url":"https://api.githubcopilot.com/mcp","headers":{"Authorization":"Bearer github_pat_********"}}' --scope user
+   claude mcp add playwright -- npx -y @playwright/mcp@latest
+   ```
+
 ## Available Skills
 
 | Skill | Description |
