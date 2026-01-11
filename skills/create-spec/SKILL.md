@@ -5,7 +5,11 @@ description: guide the creation of comprehensive work specifications for new fea
 
 # Create Spec Skill
 
-This skill guides the creation of comprehensive work specifications for new features, changes, or technical implementations.
+This skill guides the creation of comprehensive work specifications for new features, changes, or technical implementations. Specs are posted as GitHub issues by default, making them easy to track and implement with `/implement-spec`.
+
+## Requirements
+
+- GitHub MCP configured with repository access
 
 ## Workflow
 
@@ -17,6 +21,7 @@ Ask the user to describe:
 - What needs to be implemented/changed
 - Why this work is needed (business value or technical need)
 - Any specific context they can provide
+- Which repository to create the issue in (if not obvious from context)
 
 ### 2. Research the Codebase
 
@@ -50,7 +55,7 @@ Use Glob, Grep, and Read tools to explore the codebase. This research will help 
 
 ### 4. Generate the Specification
 
-Create a new markdown file with the spec. Use this template structure:
+Draft the spec content using this template structure:
 
 ```markdown
 # [Title: Concise action-oriented description of the feature/change]
@@ -137,11 +142,33 @@ Create a new markdown file with the spec. Use this template structure:
 - Document any assumptions
 - Note migration paths or rollback strategies if relevant
 
-### 6. Save and Confirm
+### 6. Confirm and Post
 
-- Ask the user where they want to save the spec file
-- Default location: `specs/[descriptive-name].md`
-- After creating the file, summarize the key points and ask if any sections need refinement
+**Show the spec to the user for review before posting.**
+
+Use `AskUserQuestion` to ask:
+1. **Post as GitHub issue (recommended)** — Create an issue in the target repository
+2. **Save locally** — Save to `specs/[descriptive-name].md` instead
+
+**If posting to GitHub:**
+- Use GitHub MCP `issue_write` with method `create`
+- Use the spec title as the issue title
+- Use the spec body (Description through Technical Notes) as the issue body
+- Report the created issue URL to the user
+
+**If saving locally:**
+- Save to the user's preferred path or `specs/[descriptive-name].md`
+
+After creating, summarize the key points and ask if any sections need refinement.
+
+## User Confirmation
+
+**CRITICAL:** Always use `AskUserQuestion`:
+- Before posting to GitHub or saving locally
+- When clarification is needed during spec creation
+- When unsure about requirements or approach
+
+**Never post to GitHub without explicit user confirmation.**
 
 ## Example Usage
 
@@ -168,13 +195,19 @@ Based on my research, I found [summary of findings]. I have a few clarifying que
 
 I'll now create a detailed specification for you...
 
-[Assistant creates the spec file]
+[Assistant drafts the spec and shows it to user]
 
-I've created the specification at `specs/feature-name.md`. Here's a summary:
+Here's the spec I've drafted. Would you like to:
+1. Post as GitHub issue (recommended)
+2. Save locally instead
+
+[User chooses GitHub issue]
+
+I've created the issue at https://github.com/org/repo/issues/42. Here's a summary:
 - [Key points]
 - [Important technical notes]
 
-Would you like me to expand on any sections or make adjustments?
+Would you like me to expand on any sections, or are you ready to implement with `/implement-spec #42`?
 ```
 
 ## Notes
