@@ -1,21 +1,8 @@
-# WebOps Documentation
+# WebOps Skills
 
-Internal documentation repository for the WebOps team at Yearn Finance.
+Custom skills for [Claude Code](https://claude.com/claude-code) used by the WebOps team at Yearn Finance.
 
-## Purpose
-
-This repository captures team policies, protocols, and internal documentation for our web2 engineering team. We use git-based markdown documentation for:
-
-- Version control and change tracking
-- PR-based review workflows
-- Developer-friendly editing experience
-- Keeping documentation close to our development workflows
-
-## Claude Code Skills
-
-This repository includes custom skills for [Claude Code](https://claude.com/claude-code) to enhance development workflows.
-
-### Setup
+## Setup
 
 1. **Install dependencies and export skills:**
    ```bash
@@ -31,35 +18,26 @@ This repository includes custom skills for [Claude Code](https://claude.com/clau
 
    Skills that query historical blockchain state load archive node RPCs from the root `.env` using the format `ARCHIVE_NODE_[CHAIN_ID]` (e.g., `ARCHIVE_NODE_1` for Ethereum, `ARCHIVE_NODE_8453` for Base).
 
-### Available Skills
+## Available Skills
 
-#### find-create-block
-Estimates contract creation block using binary search on archive node RPC.
+| Skill | Description |
+|-------|-------------|
+| `find-create-block` | Estimate contract creation block via binary search on archive RPC |
+| `npm-policy` | Evaluate npm packages against dependency policy |
+| `create-commit` | Git commit message guidelines |
+| `create-pr` | PR title and description template |
+| `review-pr` | Review PRs and post feedback via GitHub MCP |
+| `create-skill` | Create new Claude Code skills |
+| `create-spec` | Create work specifications for features |
+| `standup-report` | Generate git-based standup reports |
+| `yearn-branding` | Add Yearn brand assets to projects |
+| `yearn-vaults` | Query Yearn vault system documentation |
 
-#### npm-policy
-Evaluates npm packages against the dependency policy before adding them.
+## Usage
 
-#### create-commit
-Guidelines for composing git commit titles and bodies following project standards.
-
-#### create-skill
-Create new Claude Code skills following the standard format. Guides through requirements gathering, drafting, and exporting skills.
-
-#### create-spec
-Helps create comprehensive work specifications for new features or changes using a structured template. Guides through requirement gathering, codebase research, and generates detailed specs with tasks, acceptance criteria, and technical notes.
-
-#### create-pr
-Guide for composing pull request titles and descriptions (placeholder).
-
-#### review-pr
-Review pull requests, run checks, and post structured feedback via GitHub MCP.
-
-#### standup-report
-Generate git-based reports for standup meetings (placeholder).
-
-#### yearn-branding
-Add Yearn brand assets (logo, favicon) to projects. Sources from presskit.yearn.fi.
-
----
-
-**Note:** This repository is private and intended for internal Yearn Finance WebOps team use only.
+After setup, invoke skills in Claude Code:
+```
+/npm-policy axios
+/create-commit
+/review-pr 123
+```
