@@ -18,6 +18,20 @@ Custom skills for [Claude Code](https://claude.com/claude-code) used by the WebO
 
    Skills that query historical blockchain state load archive node RPCs from the root `.env` using the format `ARCHIVE_NODE_[CHAIN_ID]` (e.g., `ARCHIVE_NODE_1` for Ethereum, `ARCHIVE_NODE_8453` for Base).
 
+3. **Create a GitHub PAT (required for GitHub MCP skills):**
+
+   Create a [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) with these settings:
+   - **Token name:** `[agent]-[repo1]-[repo2]-...` (e.g., `code-yearnfi-kong-ydaemon`)
+   - **Resource owner:** Yearn
+   - **Expiration:** Use shortest option available
+   - **Repository access:** Only select repositories (pick the repos you need)
+   - **Permissions:** Read and write access to:
+     - Contents
+     - Issues
+     - Pull requests
+
+   > **Important:** Delete your token when you're done with your work session.
+
 ## Available Skills
 
 | Skill | Description |
