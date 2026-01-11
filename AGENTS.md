@@ -4,15 +4,18 @@ This file provides guidance to AI coding agents when working with code in this r
 
 ## Repository Purpose
 
-This is an internal documentation repository for the WebOps team at Yearn Finance. It uses git-based markdown documentation for:
+This repository contains custom Claude Code skills used by the WebOps team at Yearn Finance.
 
-- Version control and change tracking
-- PR-based review workflows
-- Developer-friendly editing experience
-- Keeping documentation close to development workflows
+## Structure
 
-## Important Notes
+- `skills/` - Claude Code skill definitions
+  - Each skill has a `SKILL.md` file defining activation criteria, workflow, and output format
+  - Some skills include additional resources (policy docs, examples, scripts)
+- `skills/export.sh` - Symlinks skills to `~/.claude/skills/`
 
-- This repository is **private** and intended for internal Yearn Finance WebOps team use only
-- All documentation should be in markdown format
-- Changes should follow PR-based review workflows
+## Working with Skills
+
+- Skills are markdown-based prompt definitions
+- Follow the existing `SKILL.md` format when creating new skills
+- Use `/create-skill` to scaffold new skills
+- Test skills after changes by re-running `bun run install-skills`
