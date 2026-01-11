@@ -51,6 +51,9 @@ Helps create comprehensive work specifications for new features or changes using
 #### create-pr
 Guide for composing pull request titles and descriptions (placeholder).
 
+#### review-pr
+Review pull requests, run checks, and post structured feedback via GitHub MCP.
+
 #### standup-report
 Generate git-based reports for standup meetings (placeholder).
 
