@@ -55,6 +55,53 @@ Custom skills for [Claude Code](https://claude.com/claude-code) used by the WebO
 | `yearn-branding` | Add Yearn brand assets to projects |
 | `yearn-vaults` | Query Yearn vault system documentation |
 
+## Ship-Spec: Full Dev Cycle Orchestration
+
+The `ship-spec` skill chains four skills into a complete development workflow:
+
+```
+create-spec → implement-spec → create-pr → review-pr
+```
+
+By default it pauses for your approval after each step, keeping operators in control.
+
+### Entry Points
+
+Start anywhere in the flow depending on what you already have:
+
+| Command | Starts at | Use when |
+|---------|-----------|----------|
+| `/ship-spec` | Spec creation | Starting fresh |
+| `/ship-spec #42` | Implementation | You have a spec issue ready |
+| `/ship-spec pr 123` | PR review | You have a PR ready for review |
+
+### Example
+
+```
+> /ship-spec
+Starting full dev cycle. What feature do you want to build?
+
+> Add a logout button to the navbar
+
+[Drafts spec, posts as issue #42]
+Spec created at #42. Ready to implement?
+
+> yes
+
+[Implements the spec, runs checks]
+Implementation complete. Ready to create PR?
+
+> yes
+
+[Creates PR #87]
+PR created. Ready to run review?
+
+> yes
+
+[Reviews PR, posts feedback]
+Done! PR #87 is ready for human review.
+```
+
 ## Usage
 
 After setup, invoke skills in Claude Code:
