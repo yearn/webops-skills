@@ -56,11 +56,15 @@ This skill currently focuses on **web/frontend projects** (React, TypeScript, Ne
    - Interact with changed components to verify functionality
    - Optionally compare with main branch for before/after
 
-9. **Generate review** - Create structured feedback and **show it to the user for approval**
+9. **Generate review** - Create structured feedback
 
-10. **Confirm before posting** - Use `AskUserQuestion` to get explicit approval before submitting
+10. **Confirm before posting** 
+   - Show a human-readable markdown version of thet review
+   - Use `AskUserQuestion` to get explicit approval before submitting
 
-11. **Cleanup** - Remove any screenshot files created during verification
+11. **Post** - Post review to github using the github mcp
+
+12. **Cleanup** - Remove any screenshot files created during verification
 
 ## User Confirmation
 
