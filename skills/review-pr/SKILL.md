@@ -1,6 +1,6 @@
 ---
 name: review-pr
-description: Review pull requests, run checks, and post structured feedback via GitHub MCP
+description: Review pull requests, run checks, present findings for user feedback, then post structured feedback via GitHub MCP
 ---
 
 ## Activation Criteria
@@ -58,11 +58,12 @@ This skill currently focuses on **web/frontend projects** (React, TypeScript, Ne
 
 9. **Generate review** - Create structured feedback
 
-10. **Confirm before posting** 
-   - Show a human-readable markdown version of thet review
-   - Use `AskUserQuestion` to get explicit approval before submitting
+10. **Preview the review for the user**
+   - Output the full review as a markdown text message directly in the conversation so the user can read it
+   - Do NOT skip this step — the user must see the review content as plain text, not just as a tool call preview
+   - After outputting the review, use `AskUserQuestion` to ask for approval or feedback before proceeding
 
-11. **Post** - Post review to github using the github mcp
+11. **Post** - Only after the user explicitly approves, post the review to GitHub using the GitHub MCP. Do NOT call any GitHub write tools until step 10 approval is received.
 
 12. **Cleanup** - Remove any screenshot files created during verification
 
