@@ -53,6 +53,7 @@ Custom skills for [Claude Code](https://claude.com/claude-code) used by the WebO
 | `ship-spec` | Orchestrate full dev cycle: spec → implement → PR → review |
 | `socket-check` | Check package.json dependencies for security issues using Socket.dev |
 | `standup-report` | Generate git-based standup report - pulls all prs opened and merged through the last 7 days in the entire yearn org. |
+| `vault-info` | Query ERC-4626 vault data (TVL, APR, strategies, fees) via Kong REST API |
 | `yearn-branding` | Add Yearn brand assets to projects |
 | `vuln-report-triage` | Triage inbound vulnerability reports to determine if they warrant investigation |
 | `yearn-vaults` | Query Yearn vault system documentation |
