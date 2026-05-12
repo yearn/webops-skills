@@ -1,14 +1,15 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "find-create-block",
       "dependencies": {
-        "dotenv": "^16.4.7",
-        "viem": "^2.21.54",
+        "dotenv": "16.6.1",
+        "viem": "2.38.6",
       },
       "devDependencies": {
-        "@types/node": "^22.10.1",
+        "@types/node": "22.19.0",
       },
     },
   },
