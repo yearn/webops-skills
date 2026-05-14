@@ -7,10 +7,10 @@
     "find": "bun run find-create-block.ts"
   },
   "dependencies": {
-    "viem": "^2.21.54",
-    "dotenv": "^16.4.7"
+    "viem": "2.21.54",
+    "dotenv": "16.4.7"
   },
   "devDependencies": {
-    "@types/node": "^22.10.1"
+    "@types/node": "22.10.1"
   }
 }
