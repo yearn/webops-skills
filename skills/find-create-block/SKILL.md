@@ -11,13 +11,13 @@ Use this skill when:
 
 ## Prerequisites
 
-Requires archive node RPC configured in `~/git/webops/.env`. See [README](../../README.md) for setup.
+Requires archive node RPC configured in `~/git/webops-skills/.env`. See [README](../../README.md) for setup.
 
 ## Usage
 
 ### Execute the Script
 ```bash
-cd ~/git/webops/skills/find-create-block
+cd ~/git/webops-skills/skills/find-create-block
 bun run find-create-block.ts <chainId> <address>
 ```
 
@@ -73,7 +73,7 @@ The script outputs JSON to stdout:
 ```
 Error: No archive node RPC URL configured for chain 8453. Add ARCHIVE_NODE_8453 to .env file.
 ```
-→ Add the chain's archive node RPC URL to `~/git/webops/.env`
+→ Add the chain's archive node RPC URL to `~/git/webops-skills/.env`
 
 **Invalid Address**
 ```
@@ -105,7 +105,7 @@ When this skill is activated:
 1. **Get inputs** from user (chainId and address)
 2. **Execute script**:
    ```bash
-   cd ~/git/webops/skills/find-create-block
+   cd ~/git/webops-skills/skills/find-create-block
    bun run find-create-block.ts <chainId> <address>
    ```
 3. **Parse JSON output** from stdout
