@@ -1,6 +1,6 @@
 # WebOps Skills
 
-Custom skills for [Claude Code](https://claude.com/claude-code) used by the WebOps team at Yearn Finance.
+Custom skills for Claude Code and OpenAI Codex used by the WebOps team at Yearn Finance.
 
 ## Setup
 
@@ -10,6 +10,10 @@ Custom skills for [Claude Code](https://claude.com/claude-code) used by the WebO
    bun run install-skills
    ```
 
+   This installs skill dependencies and symlinks each skill into both:
+   - `~/.claude/skills`
+   - `~/.codex/skills`
+
 2. **Configure archive nodes (required for some skills):**
    ```bash
    cp .env.example .env
@@ -18,7 +22,7 @@ Custom skills for [Claude Code](https://claude.com/claude-code) used by the WebO
 
    Skills that query historical blockchain state load archive node RPCs from the root `.env` using the format `ARCHIVE_NODE_[CHAIN_ID]` (e.g., `ARCHIVE_NODE_1` for Ethereum, `ARCHIVE_NODE_8453` for Base).
 
-3. **Create a GitHub PAT (required for GitHub MCP skills):**
+3. **Create a GitHub PAT (required for GitHub-backed skills in Claude Code):**
 
    Create a [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) with these settings:
    - **Token name:** `[agent]-[repo1]-[repo2]-...` (e.g., `code-yearnfi-kong-ydaemon`)
@@ -32,11 +36,13 @@ Custom skills for [Claude Code](https://claude.com/claude-code) used by the WebO
 
    > **Important:** Delete your token when you're done with your work session.
 
-4. **Install MCP servers (required for GitHub and browser automation skills):**
+4. **Install MCP servers (required for GitHub and browser automation skills in Claude Code):**
    ```bash
    claude mcp add-json github '{"type":"http","url":"https://api.githubcopilot.com/mcp","headers":{"Authorization":"Bearer github_pat_********"}}' --scope user
    claude mcp add playwright -- npx -y @playwright/mcp@latest
    ```
+
+   In Codex, use the built-in GitHub app/tools and available browser tooling instead of the Claude MCP commands.
 
 ## Available Skills
 
@@ -46,8 +52,8 @@ Custom skills for [Claude Code](https://claude.com/claude-code) used by the WebO
 | `npm-policy` | Evaluate npm packages against dependency policy |
 | `create-commit` | Git commit message guidelines |
 | `create-pr` | PR title and description template |
-| `review-pr` | Review PRs and post feedback via GitHub MCP |
-| `create-skill` | Create new Claude Code skills |
+| `review-pr` | Review PRs and post feedback via GitHub tooling |
+| `create-skill` | Create new agent skills |
 | `create-spec` | Create work specifications for features |
 | `implement-spec` | Implement a spec from GitHub issue or file |
 | `ship-spec` | Orchestrate full dev cycle: spec → implement → PR → review |
@@ -107,7 +113,7 @@ Done! PR #87 is ready for human review.
 
 ## Usage
 
-After setup, invoke skills in Claude Code:
+After setup, invoke skills with slash commands in Claude Code or by naming the skill in Codex:
 ```
 /npm-policy axios
 /create-commit

@@ -98,7 +98,7 @@ Error: address must be a valid Ethereum address (0x...)
   - Base (~10M blocks): ~24 calls
 - **Time**: Depends on RPC latency (typically 5-30 seconds)
 
-## Workflow for Claude Code
+## Workflow for Agents
 
 When this skill is activated:
 

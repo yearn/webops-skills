@@ -1,12 +1,13 @@
 #!/bin/bash
+set -euo pipefail
 
 # Get the absolute path to the skills directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILLS_SOURCE="$SCRIPT_DIR"
-SKILLS_TARGET="$HOME/.claude/skills"
-
-# Create target directory if it doesn't exist
-mkdir -p "$SKILLS_TARGET"
+SKILLS_TARGETS=(
+    "$HOME/.claude/skills"
+    "$HOME/.codex/skills"
+)
 
 # Check if .env file exists in repo root
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -18,43 +19,53 @@ if [ ! -f "$REPO_ROOT/.env" ]; then
     echo ""
 fi
 
-# Create symlinks for all items in skills/ (except export.sh and package.json)
-for item in "$SKILLS_SOURCE"/*; do
-    basename_item=$(basename "$item")
+for SKILLS_TARGET in "${SKILLS_TARGETS[@]}"; do
+    # Create target directory if it doesn't exist
+    mkdir -p "$SKILLS_TARGET"
 
-    # Skip if item is a symlink (prevents recursive linking)
-    if [ -L "$item" ]; then
-        continue
-    fi
+    # Create symlinks for all skill directories
+    for item in "$SKILLS_SOURCE"/*; do
+        basename_item=$(basename "$item")
 
-    # Skip export.sh and package.json
-    if [ "$basename_item" = "export.sh" ] || [ "$basename_item" = "package.json" ]; then
-        continue
-    fi
-
-    # Remove existing symlink/file if it exists to prevent nested symlinks
-    target_path="$SKILLS_TARGET/$basename_item"
-    if [ -e "$target_path" ] || [ -L "$target_path" ]; then
-        rm -rf "$target_path"
-    fi
-
-    # Create symlink
-    ln -s "$item" "$SKILLS_TARGET/$basename_item"
-    echo "Linked: $basename_item"
-done
-
-# Remove orphaned symlinks from target directory
-for link in "$SKILLS_TARGET"/*; do
-    if [ -L "$link" ]; then
-        basename_link=$(basename "$link")
-        source_item="$SKILLS_SOURCE/$basename_link"
-
-        # If the source doesn't exist, remove the symlink
-        if [ ! -e "$source_item" ]; then
-            rm "$link"
-            echo "Removed orphaned symlink: $basename_link"
+        # Skip if item is a symlink (prevents recursive linking)
+        if [ -L "$item" ]; then
+            continue
         fi
-    fi
+
+        # Skip non-skill files and directories
+        if [ ! -f "$item/SKILL.md" ]; then
+            continue
+        fi
+
+        # Remove existing symlink/file if it exists to prevent nested symlinks
+        target_path="$SKILLS_TARGET/$basename_item"
+        if [ -e "$target_path" ] || [ -L "$target_path" ]; then
+            if [ ! -L "$target_path" ]; then
+                echo "Refusing to overwrite non-symlink: $target_path"
+                exit 1
+            fi
+            rm "$target_path"
+        fi
+
+        # Create symlink
+        ln -s "$item" "$target_path"
+        echo "Linked: $basename_item -> $SKILLS_TARGET"
+    done
+
+    # Remove orphaned symlinks from target directory
+    for link in "$SKILLS_TARGET"/*; do
+        if [ -L "$link" ]; then
+            basename_link=$(basename "$link")
+            link_target=$(readlink "$link")
+            source_item="$SKILLS_SOURCE/$basename_link"
+
+            # If a symlink managed by this repo points to a removed source, remove it.
+            if [[ "$link_target" == "$SKILLS_SOURCE/"* && ! -e "$source_item" ]]; then
+                rm "$link"
+                echo "Removed orphaned symlink: $basename_link from $SKILLS_TARGET"
+            fi
+        fi
+    done
 done
 
 echo "Skills export complete!"

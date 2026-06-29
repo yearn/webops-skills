@@ -1,12 +1,12 @@
 ---
 name: create-skill
-description: create new Claude Code skills following the standard format
+description: create new agent skills following the standard SKILL.md format
 ---
 
 ## Activation Criteria
 Use this skill when:
 - Creating a new skill
-- User says "/create-skill"
+- User asks for `create-skill`
 
 ## Skill Structure
 
@@ -38,7 +38,7 @@ Use this skill when:
 
 ## Workflow
 
-1. **Gather requirements** - Use `AskUserQuestion` to clarify:
+1. **Gather requirements** - Ask concise clarifying questions to determine:
    - What should the skill do?
    - When should it activate?
    - What inputs/outputs are expected?
@@ -50,7 +50,7 @@ Use this skill when:
 
 4. **Create folder** - Save to `webops/skills/<skill-name>/SKILL.md`
 
-5. **Export** - Run `webops/skills/export.sh` to symlink to `~/.claude/skills/`
+5. **Export** - Run `webops/skills/export.sh` to symlink to `~/.claude/skills/` and `~/.codex/skills/`
 
 ## Guidelines
 

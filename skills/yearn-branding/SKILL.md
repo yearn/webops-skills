@@ -31,7 +31,7 @@ https://presskit.yearn.fi
 
 ## Workflow
 
-1. **Gather requirements** - Use `AskUserQuestion` to clarify:
+1. **Gather requirements** - Ask concise clarifying questions to determine:
    - Logo type: Full wordmark or Y symbol only?
    - Color variant: Full-color, white, or black?
    - Which assets needed: Logo, favicon, or both?

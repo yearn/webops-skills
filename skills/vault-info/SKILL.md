@@ -1,3 +1,8 @@
+---
+name: vault-info
+description: query ERC-4626 vault data via Kong REST API for TVL, APR, strategies, fees, and capacity
+---
+
 # Vault Info Skill
 
 Query ERC-4626 vault data (especially Yearn vaults) via the Kong REST API.

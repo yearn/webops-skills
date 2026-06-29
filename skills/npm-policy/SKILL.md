@@ -11,7 +11,7 @@ Use this skill when:
 - Auditing all dependencies in a project
 
 ## Policy Reference
-Read the full policy at: `~/.claude/skills/npm-policy/policy.md`
+Read the full policy in this skill directory at: `policy.md`
 
 ## Ignore List
 Check for `.webopsignore` in the local project root. If it exists, look for:
@@ -52,6 +52,6 @@ Skip any packages listed there during audits.
    - Alternative suggestions if rejecting
 
 ## Output Format
-For full project audits, follow the format in: `~/.claude/skills/npm-policy/output-example.md`
+For full project audits, follow the format in this skill directory at: `output-example.md`
 
 For single package evaluations, provide a structured evaluation covering all decision framework points with a clear final recommendation.

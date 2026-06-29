@@ -5,13 +5,13 @@ description: implement a specification from a GitHub issue or spec file by follo
 
 ## Activation Criteria
 Use this skill when:
-- User says "/implement-spec"
+- User asks for `implement-spec`
 - User asks to implement a spec, specification, or issue
 - User provides a GitHub issue URL/number or spec file path to implement
 
 ## Requirements
 
-- GitHub MCP configured with repository access
+- GitHub tooling configured with repository access
 - A specification (either a GitHub issue or local spec file following the `create-spec` format)
 
 ## Workflow
@@ -19,7 +19,7 @@ Use this skill when:
 ### 1. Load the Specification
 
 **From GitHub issue (recommended):**
-- Use GitHub MCP to fetch the issue by number or URL
+- Use available GitHub tooling to fetch the issue by number or URL
 - Parse the issue body for tasks and acceptance criteria
 - Note any linked issues or references
 
@@ -34,7 +34,7 @@ Extract and understand:
 
 ### 2. Create Implementation Plan
 
-Use TodoWrite to create a todo list from the spec tasks:
+Maintain a task list using the active agent's planning or todo tool:
 - Convert each task into a trackable todo item
 - Preserve task groupings and order
 - Add acceptance criteria verification as final todos
@@ -59,7 +59,7 @@ For each task:
 - Follow the technical notes and constraints from the spec
 - Match existing code patterns and conventions
 - Don't over-engineer — implement exactly what the spec asks for
-- If blocked or uncertain, use `AskUserQuestion` to clarify
+- If blocked or uncertain, ask the user to clarify
 
 ### 5. Verify Acceptance Criteria
 
@@ -72,7 +72,7 @@ After all tasks are complete:
 
 **Ask the user their preference:**
 
-Use `AskUserQuestion` to ask whether they want to:
+Ask whether they want to:
 1. **Let the agent run checks** — Run lint, tests, and build automatically
 2. **Run checks manually** — Skip automated checks; user will verify themselves
 
@@ -96,7 +96,7 @@ Provide a summary:
 
 ## User Confirmation
 
-Use `AskUserQuestion` when:
+Ask for user confirmation when:
 - A task is ambiguous or has multiple valid approaches
 - The spec conflicts with existing code patterns
 - You need to deviate from the spec
@@ -107,3 +107,4 @@ Use `AskUserQuestion` when:
 
 ```
 User: /implement-spec #42
+```

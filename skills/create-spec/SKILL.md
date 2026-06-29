@@ -9,7 +9,7 @@ This skill guides the creation of comprehensive work specifications for new feat
 
 ## Requirements
 
-- GitHub MCP configured with repository access
+- GitHub tooling configured with repository access
 
 ## Workflow
 
@@ -31,7 +31,7 @@ Before filling out the spec template, research the codebase to understand:
 - Related schemas, interfaces, or APIs
 - Current implementation (if modifying existing functionality)
 
-Use Glob, Grep, and Read tools to explore the codebase. This research will help you:
+Use filesystem search and read tools to explore the codebase. This research will help you:
 - Provide specific file paths in the spec
 - Suggest concrete tasks based on existing patterns
 - Identify potential technical constraints
@@ -39,7 +39,7 @@ Use Glob, Grep, and Read tools to explore the codebase. This research will help 
 
 ### 3. Ask Clarifying Questions
 
-**IMPORTANT**: Use the AskUserQuestion tool when you are unsure about:
+**IMPORTANT**: Ask the user clarifying questions when you are unsure about:
 - Which specific approach to take among multiple valid options
 - Technical constraints or requirements that aren't obvious from the codebase
 - Breaking change policies or backward compatibility requirements
@@ -146,12 +146,12 @@ Draft the spec content using this template structure:
 
 **Show the spec to the user for review before posting.**
 
-Use `AskUserQuestion` to ask:
+Ask the user to choose:
 1. **Post as GitHub issue (recommended)** — Create an issue in the target repository
 2. **Save locally** — Save to `specs/[descriptive-name].md` instead
 
 **If posting to GitHub:**
-- Use GitHub MCP `issue_write` with method `create`
+- Use available GitHub issue creation tooling
 - Use the spec title as the issue title
 - Use the spec body (Description through Technical Notes) as the issue body
 - Report the created issue URL to the user
@@ -163,7 +163,7 @@ After creating, summarize the key points and ask if any sections need refinement
 
 ## User Confirmation
 
-**CRITICAL:** Always use `AskUserQuestion`:
+**CRITICAL:** Always ask for user confirmation:
 - Before posting to GitHub or saving locally
 - When clarification is needed during spec creation
 - When unsure about requirements or approach
@@ -185,7 +185,7 @@ First, let me understand what you're working on:
 
 Let me research the codebase to understand the current implementation...
 
-[Assistant uses Glob/Grep/Read to explore]
+[Assistant uses search/read tools to explore]
 
 Based on my research, I found [summary of findings]. I have a few clarifying questions:
 1. [Specific question based on research]
@@ -216,4 +216,4 @@ Would you like me to expand on any sections, or are you ready to implement with 
 - Be specific with file paths and references
 - Don't make assumptions about critical implementation details
 - A spec with questions is better than a spec with wrong assumptions
-- Use the AskUserQuestion tool for multiple choice clarifications
+- Ask concise multiple choice clarifications when needed
