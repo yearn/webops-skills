@@ -1,11 +1,11 @@
 ---
 name: review-pr
-description: Review pull requests, run checks, present findings for user feedback, then post structured feedback via GitHub MCP
+description: Review pull requests, run checks, present findings for user feedback, then post structured feedback via GitHub tooling
 ---
 
 ## Activation Criteria
 Use this skill when:
-- User says "/review-pr"
+- User asks for `review-pr`
 - User asks to review a pull request
 - User provides a GitHub PR URL or number to review
 
@@ -15,12 +15,12 @@ This skill currently focuses on **web/frontend projects** (React, TypeScript, Ne
 
 ## Requirements
 
-- GitHub MCP configured with a PAT that has read/write access to PRs and issues
-- Playwright MCP for visual and functional verification
+- GitHub tooling configured with read/write access to PRs and issues
+- Playwright or browser automation tooling for visual and functional verification
 
 ## Workflow
 
-1. **Fetch PR details** - Use GitHub MCP to get:
+1. **Fetch PR details** - Use available GitHub tooling to get:
    - PR description and metadata
    - Changed files and diff
    - Existing comments/reviews
@@ -49,7 +49,7 @@ This skill currently focuses on **web/frontend projects** (React, TypeScript, Ne
    - Missing error handling
    - Code clarity and maintainability
 
-8. **Visual verification with Playwright** - Use Playwright MCP to:
+8. **Visual verification with Playwright** - Use Playwright or browser automation tooling to:
    - Run the app locally on the PR branch
    - Navigate to affected pages/components
    - Take screenshots of UI changes
@@ -61,15 +61,15 @@ This skill currently focuses on **web/frontend projects** (React, TypeScript, Ne
 10. **Preview the review for the user**
    - Output the full review as a markdown text message directly in the conversation so the user can read it
    - Do NOT skip this step — the user must see the review content as plain text, not just as a tool call preview
-   - After outputting the review, use `AskUserQuestion` to ask for approval or feedback before proceeding
+   - After outputting the review, ask for approval or feedback before proceeding
 
-11. **Post** - Only after the user explicitly approves, post the review to GitHub using the GitHub MCP. Do NOT call any GitHub write tools until step 10 approval is received.
+11. **Post** - Only after the user explicitly approves, post the review to GitHub using available GitHub tooling. Do NOT call any GitHub write tools until step 10 approval is received.
 
 12. **Cleanup** - Remove any screenshot files created during verification
 
 ## User Confirmation
 
-**CRITICAL:** Always use the `AskUserQuestion` tool:
+**CRITICAL:** Always ask for explicit user confirmation:
 - Before posting a review to GitHub
 - Before approving or requesting changes
 - Before posting any comments
@@ -80,7 +80,7 @@ This skill currently focuses on **web/frontend projects** (React, TypeScript, Ne
 
 ## Playwright Verification
 
-Use Playwright MCP to visually and functionally verify UI changes:
+Use Playwright or browser automation tooling to visually and functionally verify UI changes:
 
 1. **Start the dev server** - Run the project's dev command (e.g., `bun dev`, `npm run dev`)
 2. **Navigate to affected areas** - Visit pages/routes that were changed in the PR

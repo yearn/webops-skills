@@ -16,7 +16,7 @@ A raw vulnerability report submitted by an external researcher, targeting a syst
 - A file path to a report
 - A URL to a report on a platform (e.g., HackerOne, Immunefi)
 
-If the input is unclear or missing, use `AskUserQuestion` to ask the user for the report content.
+If the input is unclear or missing, ask the user for the report content.
 
 ## Triage Process
 
