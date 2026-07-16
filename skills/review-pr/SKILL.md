@@ -97,6 +97,20 @@ Use Playwright or browser automation tooling to visually and functionally verify
 - Delete all screenshots after the review is complete (step 11 in workflow)
 - Never commit screenshot files to the repository
 
+## Writing Actionable Change Requests
+
+The PR author is accountable for meeting every requirement in a review. Even so, write each change request so the cheapest misreading of it is impossible — a review that leads with "remove X" and buries its constraints under the rationale invites a wholesale action that deletes things the review required to keep.
+
+For every requested change:
+
+1. **Anchor to code, not policy.** Check the actual code structure before writing the instruction. If the behavior to remove is one predicate inside a function that also does required things, say so: "In `selectValidOutputs`, remove only the requested-address check; the chainId, label, and cap checks stay."
+2. **Name the naive action when it's wrong.** If the request sits next to an easy wholesale action (revert a commit, delete a function, regenerate a file), state explicitly whether that action satisfies the review: "This is not a plain revert of #435 — a revert deletes protections this review requires."
+3. **State retentions as checkable assertions.** "Retain the output caps" is a property; "the existing chain/label/cap tests must still pass" is verifiable. Name tests or observable behavior that must remain green. If a behavior to retain has no test, request one.
+4. **Keep constraints next to the imperative.** Put "keep/don't touch" clauses in the same bullet as the "remove/change" instruction, never paragraphs later under supporting rationale.
+5. **Describe the end state.** When a change is surgical rather than wholesale, sketch the code after the change: which functions exist, which checks remain, what the resulting contract is.
+
+When re-reviewing a revision, check it against each item of the prior review and name the unmet items explicitly — "chain/label/cap validation was removed; the review asked to retain it" converges in one round; "this does not address the review" does not.
+
 ## Review Format
 
 ```
@@ -109,6 +123,9 @@ Use Playwright or browser automation tooling to visually and functionally verify
 
 ## Issues
 - [ ] **file.tsx:42** - [Description of issue]
+  - Change: [the specific edit, anchored to functions/lines]
+  - Keep: [what must not change, stated as testable assertions — omit if nothing applies]
+  - Done when: [observable acceptance criteria]
 - [ ] **file.tsx:87** - [Description of issue]
 
 ## Suggestions
@@ -129,6 +146,7 @@ This review was conducted using the [review-pr skill](https://github.com/yearn/w
 - Always run project lint settings before manual review
 - Evaluate new dependencies against npm-policy before approving
 - Reference specific lines when commenting
+- Write change requests per "Writing Actionable Change Requests" — anchored, constraint-adjacent, with checkable retentions
 - Be constructive - suggest fixes, not just problems
 - Verify PR description matches actual changes
 - Check that implementation satisfies the linked issue requirements
