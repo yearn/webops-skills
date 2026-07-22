@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tronche"
+  short_description: "Inspect live yTranche accounting safely"
+  default_prompt: "Use $tronche to inspect and explain the live yTranche system."
