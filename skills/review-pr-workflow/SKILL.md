@@ -1,0 +1,205 @@
+---
+name: review-pr-workflow
+description: Multi-agent PR review — fans out review lenses, adversarially verifies every material claim before it reaches the author, then posts via the review-pr format after explicit approval
+---
+
+## Activation Criteria
+Use this skill when:
+- User says `/review-pr-workflow`
+- User asks for a multi-agent, verified, or "deep" PR review
+- User asks to review a PR and explicitly wants fan-out / subagent verification
+
+For an ordinary single-pass review, use `review-pr` instead. This skill costs many times more tokens.
+
+## Scope
+
+Same scope as `review-pr`: **web/frontend projects** (React, TypeScript, Next.js). This skill inherits `review-pr`'s review format, its rules for writing actionable change requests, and its approval gate — it changes only *how the findings are produced*, not what a review looks like or who gets to post it.
+
+## Arguments
+
+```
+/review-pr-workflow <pr-url-or-number> [verify-agent=claude|codex] [tier=auto|full|light|skip]
+```
+
+| Arg | Default | Meaning |
+|-----|---------|---------|
+| `verify-agent` | `claude` | Which agent verifies findings in Phase 2. `claude` uses the session model. `codex` shells out to the `codex` CLI. |
+| `tier` | `auto` | How much horsepower to spend. `auto` detects from the diff (see Tier Detection). Anything else overrides detection. |
+
+Example: `/review-pr-workflow https://github.com/yearn/kong/pull/412 verify-agent=codex tier=full`
+
+### Why `verify-agent=codex`
+
+A second Claude instance shares the first one's blind spots — it tends to find the same false positives plausible. Codex is a different model, so its verification is genuinely independent. Prefer it when the review will request changes on someone else's PR, or when a finding rests on subtle reasoning rather than a plain fact about the code.
+
+Requires the `codex` CLI on PATH. If it is missing, say so and fall back to `claude` — do not silently substitute.
+
+## Requirements
+
+- GitHub tooling with read/write access to PRs and issues
+- Playwright or browser automation tooling for visual verification
+- `codex` CLI on PATH (only when `verify-agent=codex`)
+
+---
+
+## Phase 0 — Main loop (before any subagent)
+
+Do all of this yourself. Subagents share one working directory; if they check out branches or start dev servers they race each other.
+
+1. **Fetch PR details** — description, metadata, changed files, diff, existing reviews.
+2. **Read the PR body for instructions** — author's review notes, linked issues (`Closes #123`, `Fixes #456`, URLs).
+3. **Fetch linked issues** — read each issue body for the original spec. The review is graded against this, not against the PR description.
+4. **Checkout the PR branch locally.** Do this once, here. Every workflow agent is read-only from this point.
+5. **Run project linters** — `bun run lint`, `npm run lint`, whatever the project defines. Capture the output; it goes into the workflow as context so five agents don't each re-run it.
+6. **Detect new dependencies** — if `package.json` changed, list newly added packages. These feed the dependency lens.
+7. **Detect the tier** (below) and **state it out loud with its reason** before spawning anything.
+
+### Tier Detection
+
+Read `gh pr diff --name-only` and `--stat`. Two rules govern everything:
+
+**Sensitivity can only upgrade. Size can only downgrade. Sensitivity wins.**
+
+The failure that matters is under-reviewing a small dangerous diff, not overspending on a big boring one.
+
+**Force `full` — any single hit, regardless of diff size:**
+- paths matching `auth`, `session`, `token`, `crypto`, `permission`, `role`, `acl`
+- `package.json` with an **added** dependency
+- `.github/workflows/`, CI config, build config
+- database migrations or schema changes
+- code that reads env vars, or config selecting a network / endpoint / contract address
+- signing scripts, chain config, hardcoded addresses
+
+**Downgrade to `light`** only when no sensitivity trigger fired **and both**:
+- the diff spans ≤ 2 top-level source directories
+- ≤ ~150 net source lines, **after excluding** lockfiles, generated files, snapshots, fixtures, translations
+
+**`skip` the workflow entirely** — review inline with plain `review-pr`:
+- docs- or comments-only
+- lockfile-only, or a pure version bump
+- generated-file-only
+- a clean revert of a single commit with no manual edits
+
+**Not criteria:** raw line count (a 2,000-line lockfile is nothing; a 40-line auth change is everything), and bot authorship (a Dependabot PR bumping a transitive dep is exactly when dependency policy matters most).
+
+**When signals conflict or a path is ambiguous, escalate.** This detector reads paths and line counts, not semantics — it cannot see a logic change hiding inside what looks like a rename.
+
+**Never downgrade silently.** Always print the tier and why:
+> `tier: light — 2 files, ~60 net lines, no sensitive paths. Override with tier=full.`
+
+### Tier → workflow shape
+
+| Tier | Review lenses | Verify votes: blocker / issue / suggestion | Critic |
+|------|---------------|-------------------------------------------|--------|
+| `full` | all 5 | 3 / 1 / 0 | yes |
+| `light` | spec-conformance + bugs | 1 / 1 / 0 | no |
+| `skip` | — run `review-pr` instead — | | |
+
+Suggestions get zero votes on purpose: they are non-blocking, so a wrong one costs a moment of the author's attention rather than a wasted round trip. Verification budget goes to claims that can block a merge.
+
+---
+
+## Phase 1–3 — The workflow
+
+The workflow script lives beside this file at `workflow.js`. **Do not paste it inline** — invoke it by path, so what executes is exactly what is in the repo and reviewed in git:
+
+```
+Workflow({
+  scriptPath: "<this skill's base directory>/workflow.js",
+  args: { ...Phase 0 output... }
+})
+```
+
+The base directory is handed to you when the skill is invoked ("Base directory for this skill: ..."). Under the standard `export.sh` install it resolves to `~/.claude/skills/review-pr-workflow/workflow.js`.
+
+### args
+
+Pass these as real JSON values, never a JSON-encoded string.
+
+| field | required | notes |
+|-------|----------|-------|
+| `pr` | yes | `{ repo, number, title, body }` |
+| `issues` | no | `[{ number, body }]` — linked issue specs. Empty means the review grades against the PR description and says so. |
+| `baseRef` | no | Base to diff against, e.g. `origin/main`. Defaults to `origin/HEAD`; pass it explicitly when the PR targets anything else. |
+| `diffStat` | no | Output of `gh pr diff --stat` |
+| `changedFiles` | no | Array of paths |
+| `lintOutput` | no | Phase 0's lint result, so five agents don't each re-run it |
+| `newDeps` | no | Newly added package names |
+| `tier` | no | `full` or `light`. `skip` throws — run `review-pr` inline instead. |
+| `verifyAgent` | no | `claude` (default) or `codex` |
+
+### returns
+
+| field | contents |
+|-------|----------|
+| `confirmed` | Findings that survived verification. These become Issues. |
+| `rejected` | Refuted findings, with the refutation reason. **Never shown to the author** — report to the user only. |
+| `dropped` | Material findings the per-lens cap left unverified. Not publishable as-is. |
+| `suggestions` | Non-blocking findings, passed through unverified by design. |
+| `gaps` | Critic's coverage gaps (`full` tier only). |
+| `stats` | `{ tier, verifyAgent, lenses, confirmed, refuted, unverified }` |
+
+### Cost
+
+Agent count scales with findings, not diff size. A PR yielding 2 blockers and 5 issues costs ~16 agents at `full` tier, ~7 at `light`. `MAX_VERIFY_PER_LENS` in `workflow.js` is the ceiling knob.
+
+---
+
+## Phase 4 — Main loop (after the workflow returns)
+
+1. **Visual verification with Playwright** — do this **here**, not in the fan-out. Parallel agents each starting a dev server collide on the same port.
+   - Start the dev server, navigate to affected routes, screenshot UI changes, interact with changed components.
+   - Save screenshots to `/tmp/pr-review-{pr-number}/`, never inside the repo.
+   - Skip entirely when the PR touches no UI.
+
+2. **Assemble the review** using `review-pr`'s Review Format. Each return field has exactly one destination — do not mix them:
+
+   | field | goes to |
+   |-------|---------|
+   | `confirmed` | **Issues.** The only findings stated as defects. |
+   | `suggestions` | **Suggestions**, as-is. Unverified by design, so never phrase one as a defect. |
+   | `gaps` | **Suggestions**, phrased as coverage this review did not reach. |
+   | `dropped` | **Nowhere in the review.** Report to the user only (step 3). |
+   | `rejected` | **Nowhere in the review.** Report to the user only (step 3). |
+
+   - Every change request follows `review-pr`'s **Writing Actionable Change Requests** — anchored to code, constraints in the same bullet as the imperative, retentions stated as checkable assertions, end state described. The schema's `change` / `keep` / `doneWhen` fields map directly onto that format.
+   - Verdict: `REQUEST_CHANGES` if any confirmed blocker survived, else `COMMENT` if any confirmed issue, else `APPROVE`. `dropped` findings never affect the verdict — an unverified claim is not evidence.
+
+3. **Preview the review for the user.** Output the full review as plain markdown text in the conversation. Do not skip this. Do not substitute a tool-call preview.
+
+   Report alongside it, outside the review body:
+   - the tier and why it was chosen, and the `verify-agent` used
+   - `stats.refuted` — how many candidate findings were refuted and dropped
+   - `stats.unverified` — anything the per-lens cap left unverified, **listed explicitly**. If this is non-zero, say so plainly: the review is not exhaustive, and raising `MAX_VERIFY_PER_LENS` or re-running that lens is the fix.
+
+4. **Post only after explicit approval.** Do not call any GitHub write tool before the user approves this specific review. A prior approval, a plan that mentioned posting, or this skill's own existence does not count.
+
+5. **Cleanup** — delete every screenshot created during verification.
+
+## User Confirmation
+
+**CRITICAL** — inherited from `review-pr` and non-negotiable here:
+
+- Always ask before posting a review, approving, requesting changes, or posting comments.
+- **Never perform write/mutating operations on GitHub without explicit user confirmation.**
+- The workflow itself can never post. It returns findings; you render them; the user approves; only then does anything reach GitHub.
+
+## Attribution
+
+Replace `review-pr`'s attribution footer with:
+
+```
+---
+
+## How This Was Reviewed
+Reviewed with the [review-pr-workflow skill](https://github.com/yearn/webops/blob/main/skills/review-pr-workflow/SKILL.md) —
+{N} review lenses, each finding independently verified by {verify-agent}. {M} candidate findings were refuted and dropped.
+```
+
+## Notes
+
+- This skill is expensive. Prefer `review-pr` for routine PRs; the tier detector exists to keep you honest about that.
+- Verification removes findings and never adds them — the critic phase is the only thing that pushes back on under-review.
+- Refuted findings are worth reporting to the user even though they never reach the author. A pattern in what gets refuted is a signal that a lens prompt needs tuning.
+- If `codex` is requested but missing, say so and fall back to `claude`. Never silently substitute a verifier.
+- Editing `workflow.js`: it is plain JS in an async context — no TypeScript, and `Date.now()` / `Math.random()` / `new Date()` throw, because they would break workflow resume. `scripts/check-workflow.mjs` exercises the control flow against stub agents; run it after any change.

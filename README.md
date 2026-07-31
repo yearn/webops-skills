@@ -53,6 +53,7 @@ Custom skills for Claude Code and OpenAI Codex used by the WebOps team at Yearn 
 | `create-commit` | Git commit message guidelines |
 | `create-pr` | PR title and description template |
 | `review-pr` | Review PRs and post feedback via GitHub tooling |
+| `review-pr-workflow` | Multi-agent PR review — fan-out lenses, adversarial verification of every finding |
 | `create-skill` | Create new agent skills |
 | `create-spec` | Create work specifications for features |
 | `implement-spec` | Implement a spec from GitHub issue or file |
