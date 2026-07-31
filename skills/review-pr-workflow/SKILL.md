@@ -89,302 +89,59 @@ The failure that matters is under-reviewing a small dangerous diff, not overspen
 
 ### Tier → workflow shape
 
-| Tier | Review lenses | Verify votes per finding | Critic |
-|------|---------------|--------------------------|--------|
-| `full` | all 5 | 3 for blockers, 1 otherwise | yes |
-| `light` | spec-conformance + bugs | 1 | no |
+| Tier | Review lenses | Verify votes: blocker / issue / suggestion | Critic |
+|------|---------------|-------------------------------------------|--------|
+| `full` | all 5 | 3 / 1 / 0 | yes |
+| `light` | spec-conformance + bugs | 1 / 1 / 0 | no |
 | `skip` | — run `review-pr` instead — | | |
+
+Suggestions get zero votes on purpose: they are non-blocking, so a wrong one costs a moment of the author's attention rather than a wasted round trip. Verification budget goes to claims that can block a merge.
 
 ---
 
 ## Phase 1–3 — The workflow
 
-Call `Workflow` with the script below, passing Phase 0's output as `args`:
+The workflow script lives beside this file at `workflow.js`. **Do not paste it inline** — invoke it by path, so what executes is exactly what is in the repo and reviewed in git:
 
-```json
-{
-  "pr": { "number": 412, "title": "...", "body": "...", "repo": "yearn/kong" },
-  "issues": [{ "number": 398, "body": "..." }],
-  "diffStat": "...",
-  "changedFiles": ["src/a.ts", "src/b.tsx"],
-  "lintOutput": "...",
-  "newDeps": ["some-package"],
-  "tier": "full",
-  "verifyAgent": "claude"
-}
+```
+Workflow({
+  scriptPath: "<this skill's base directory>/workflow.js",
+  args: { ...Phase 0 output... }
+})
 ```
 
-Pass these as real JSON values, not a JSON-encoded string.
+The base directory is handed to you when the skill is invoked ("Base directory for this skill: ..."). Under the standard `export.sh` install it resolves to `~/.claude/skills/review-pr-workflow/workflow.js`.
 
-```javascript
-export const meta = {
-  name: 'review-pr-workflow',
-  description: 'Fan out PR review lenses, adversarially verify each material claim, then critique for gaps',
-  phases: [
-    { title: 'Review', detail: 'one agent per review lens' },
-    { title: 'Verify', detail: 'refute each material finding' },
-    { title: 'Critic', detail: 'what did the review miss' },
-  ],
-}
+### args
 
-const { pr, issues, diffStat, changedFiles, lintOutput, newDeps, tier, verifyAgent } = args
+Pass these as real JSON values, never a JSON-encoded string.
 
-const CONTEXT = `
-PR ${pr.repo}#${pr.number}: ${pr.title}
+| field | required | notes |
+|-------|----------|-------|
+| `pr` | yes | `{ repo, number, title, body }` |
+| `issues` | no | `[{ number, body }]` — linked issue specs. Empty means the review grades against the PR description and says so. |
+| `baseRef` | no | Base to diff against, e.g. `origin/main`. Defaults to `origin/HEAD`; pass it explicitly when the PR targets anything else. |
+| `diffStat` | no | Output of `gh pr diff --stat` |
+| `changedFiles` | no | Array of paths |
+| `lintOutput` | no | Phase 0's lint result, so five agents don't each re-run it |
+| `newDeps` | no | Newly added package names |
+| `tier` | no | `full` or `light`. `skip` throws — run `review-pr` inline instead. |
+| `verifyAgent` | no | `claude` (default) or `codex` |
 
-PR body:
-${pr.body}
+### returns
 
-Linked issue specs (the PR is graded against these, not against its own description):
-${(issues || []).map(i => `#${i.number}:\n${i.body}`).join('\n\n') || '(none)'}
+| field | contents |
+|-------|----------|
+| `confirmed` | Findings that survived verification. These become Issues. |
+| `rejected` | Refuted findings, with the refutation reason. **Never shown to the author** — report to the user only. |
+| `dropped` | Material findings the per-lens cap left unverified. Not publishable as-is. |
+| `suggestions` | Non-blocking findings, passed through unverified by design. |
+| `gaps` | Critic's coverage gaps (`full` tier only). |
+| `stats` | `{ tier, verifyAgent, lenses, confirmed, refuted, unverified }` |
 
-Changed files:
-${(changedFiles || []).join('\n')}
+### Cost
 
-Diffstat:
-${diffStat}
-
-Lint output (already run — do not re-run):
-${lintOutput || '(clean)'}
-
-The PR branch is already checked out. You are READ-ONLY: do not checkout,
-commit, stash, start a dev server, or modify any file.
-Read the diff with: git diff origin/HEAD...HEAD
-`
-
-const ALL_LENSES = [
-  {
-    key: 'spec',
-    prompt: `Does this PR do what the linked issue asked? Find requirements in the
-issue that are unimplemented, partially implemented, or implemented differently
-than specified. Also flag anything the PR does that no issue asked for.
-If there is no linked issue, grade against the PR description and say so.`,
-  },
-  {
-    key: 'bugs',
-    prompt: `Find logic errors, off-by-ones, unhandled null/undefined, incorrect
-async ordering, race conditions, broken error handling, and state that can go
-stale. Trace the actual code paths — do not flag style.`,
-  },
-  {
-    key: 'security',
-    prompt: `Find injection, XSS, unsafe deserialization, missing authz checks,
-leaked secrets or tokens, unsafe redirects, overly broad CORS, and data exposed
-to the client that should not be. Report only what this diff introduces or fails
-to fix — not pre-existing issues elsewhere in the repo.`,
-  },
-  {
-    key: 'deps',
-    prompt: `Newly added dependencies: ${(newDeps || []).join(', ') || '(none)'}.
-For each, evaluate against the npm-policy skill's criteria and give a clear
-APPROVED or REJECTED with a one-line reason. If there are no new dependencies,
-return zero findings — do not manufacture any.`,
-  },
-  {
-    key: 'clarity',
-    prompt: `Find code that will be expensive to maintain: misleading names,
-duplicated logic that should be shared, functions doing several unrelated things,
-and missing tests for behavior this PR introduces. Be selective — only raise what
-you would genuinely block or comment on, never nitpicks.`,
-  },
-]
-
-const LENSES = tier === 'light'
-  ? ALL_LENSES.filter(l => l.key === 'spec' || l.key === 'bugs')
-  : ALL_LENSES
-
-// Verify at most this many findings per lens, highest severity first, so the
-// agent count stays bounded and the selection is deterministic across resumes.
-const MAX_VERIFY_PER_LENS = 4
-const SEVERITY_RANK = { blocker: 0, issue: 1, suggestion: 2 }
-
-const FINDINGS_SCHEMA = {
-  type: 'object',
-  required: ['findings'],
-  properties: {
-    findings: {
-      type: 'array',
-      items: {
-        type: 'object',
-        required: ['file', 'line', 'severity', 'claim', 'evidence', 'change'],
-        properties: {
-          file: { type: 'string' },
-          line: { type: 'number' },
-          severity: { type: 'string', enum: ['blocker', 'issue', 'suggestion'] },
-          claim: { type: 'string', description: 'One sentence: what is wrong.' },
-          evidence: { type: 'string', description: 'The specific code that makes this true.' },
-          change: { type: 'string', description: 'The precise edit requested.' },
-          keep: { type: 'string', description: 'What must NOT change, as a checkable assertion. Empty if nothing applies.' },
-          doneWhen: { type: 'string', description: 'Observable acceptance criteria.' },
-        },
-      },
-    },
-  },
-}
-
-const VERDICT_SCHEMA = {
-  type: 'object',
-  required: ['refuted', 'reason'],
-  properties: {
-    refuted: { type: 'boolean', description: 'True if the claim is wrong, unsupported, or not caused by this PR.' },
-    reason: { type: 'string' },
-    correction: { type: 'string', description: 'If the claim is directionally right but stated wrong, the corrected version.' },
-  },
-}
-
-function refutePrompt(f) {
-  return `${CONTEXT}
-
-A PR reviewer made this claim. Your job is to REFUTE it.
-
-  File: ${f.file}:${f.line}
-  Severity: ${f.severity}
-  Claim: ${f.claim}
-  Stated evidence: ${f.evidence}
-  Requested change: ${f.change}
-
-Read the actual code at that location and decide. Refute it if: the code does not
-say what the claim says, the problem is pre-existing and not introduced by this PR,
-the "bug" is unreachable in practice, a guard elsewhere already handles it, or the
-evidence does not actually support the claim.
-
-Default to refuted=true when uncertain. A false finding posted to a colleague's PR
-costs more than a missed one. If the claim is directionally right but inaccurately
-stated, set refuted=false and put the accurate version in "correction".`
-}
-
-function verifyOne(f) {
-  if (verifyAgent === 'codex') {
-    return agent(
-      `Shell out to codex and return ONLY the verdict it produces, as the schema requires.
-
-Write the prompt below to a temp file to avoid shell quoting problems. Allocate the
-path with \`mktemp\` — other verifiers are running concurrently, so a fixed filename
-would be overwritten mid-flight. Then:
-
-  codex exec --skip-git-repo-check - < "$TMPFILE"
-
-The prompt to write to that file:
----
-${refutePrompt(f)}
-
-Answer in exactly this form and nothing else:
-REFUTED: yes|no
-REASON: <one or two sentences>
-CORRECTION: <corrected claim, or "none">
----
-
-Parse codex's answer into the schema. If codex fails, errors, or returns nothing
-parseable, set refuted=true with reason "codex verification unavailable" — an
-unverified claim does not reach the author.`,
-      { label: `codex-verify:${f.file}:${f.line}`, phase: 'Verify', schema: VERDICT_SCHEMA },
-    )
-  }
-  return agent(refutePrompt(f), {
-    label: `verify:${f.file}:${f.line}`,
-    phase: 'Verify',
-    schema: VERDICT_SCHEMA,
-  })
-}
-
-phase('Review')
-
-const reviewed = await pipeline(
-  LENSES,
-  lens => agent(`${CONTEXT}\n\n${lens.prompt}`, {
-    label: `review:${lens.key}`,
-    phase: 'Review',
-    schema: FINDINGS_SCHEMA,
-  }),
-
-  // Rank, cap, and log the cap — a silent truncation reads as "nothing found".
-  (result, lens) => {
-    const found = (result && result.findings) || []
-    const ranked = found.slice().sort(
-      (a, b) => (SEVERITY_RANK[a.severity] ?? 9) - (SEVERITY_RANK[b.severity] ?? 9),
-    )
-    const kept = ranked.slice(0, MAX_VERIFY_PER_LENS)
-    if (ranked.length > kept.length) {
-      log(`lens ${lens.key}: ${ranked.length} findings, verifying top ${kept.length} by severity — ${ranked.length - kept.length} dropped unverified`)
-    }
-    return { lens: lens.key, kept }
-  },
-
-  // Each finding's verifiers run concurrently; blockers get a 3-vote panel.
-  async ({ lens, kept }) => {
-    const judged = await parallel(kept.map(f => async () => {
-      const votes = (tier === 'full' && f.severity === 'blocker')
-        ? (await parallel([0, 1, 2].map(() => () => verifyOne(f)))).filter(Boolean)
-        : [await verifyOne(f)].filter(Boolean)
-
-      if (!votes.length) return { ...f, lens, survived: false, why: 'no verdict returned' }
-
-      const refutedCount = votes.filter(v => v.refuted).length
-      const survived = refutedCount < Math.ceil(votes.length / 2)
-      const correction = votes.map(v => v.correction).find(c => c && c !== 'none')
-
-      return {
-        ...f,
-        lens,
-        survived,
-        votes: votes.length,
-        why: votes.map(v => v.reason).join(' | '),
-        claim: survived && correction ? correction : f.claim,
-      }
-    }))
-    return judged.filter(Boolean)
-  },
-)
-
-const all = reviewed.filter(Boolean).flat()
-const confirmed = all.filter(f => f.survived)
-const rejected = all.filter(f => !f.survived)
-
-log(`${confirmed.length} findings confirmed, ${rejected.length} refuted and dropped`)
-
-let gaps = null
-if (tier === 'full') {
-  phase('Critic')
-  gaps = await agent(
-    `${CONTEXT}
-
-A multi-lens review of this PR produced these confirmed findings:
-${confirmed.map(f => `- ${f.file}:${f.line} [${f.severity}] ${f.claim}`).join('\n') || '(none)'}
-
-Verification only ever removes findings — it can never add one. So: what did this
-review fail to look at? Consider changed files nobody cited, a linked-issue
-requirement nobody graded, a config or generated change nobody explained, and any
-behavior changed without a corresponding test. Report gaps in coverage, not new
-bugs you have not verified.`,
-    {
-      label: 'critic:gaps',
-      phase: 'Critic',
-      schema: {
-        type: 'object',
-        required: ['gaps'],
-        properties: {
-          gaps: {
-            type: 'array',
-            items: {
-              type: 'object',
-              required: ['gap', 'why'],
-              properties: { gap: { type: 'string' }, why: { type: 'string' } },
-            },
-          },
-        },
-      },
-    },
-  )
-}
-
-return {
-  confirmed,
-  rejected: rejected.map(f => ({ file: f.file, line: f.line, claim: f.claim, why: f.why })),
-  gaps: (gaps && gaps.gaps) || [],
-  tier,
-  verifyAgent,
-}
-```
+Agent count scales with findings, not diff size. A PR yielding 2 blockers and 5 issues costs ~16 agents at `full` tier, ~7 at `light`. `MAX_VERIFY_PER_LENS` in `workflow.js` is the ceiling knob.
 
 ---
 
@@ -395,15 +152,25 @@ return {
    - Save screenshots to `/tmp/pr-review-{pr-number}/`, never inside the repo.
    - Skip entirely when the PR touches no UI.
 
-2. **Assemble the review** using `review-pr`'s Review Format, with these rules:
-   - Only `confirmed` findings become Issues. Refuted findings never reach the author.
+2. **Assemble the review** using `review-pr`'s Review Format. Each return field has exactly one destination — do not mix them:
+
+   | field | goes to |
+   |-------|---------|
+   | `confirmed` | **Issues.** The only findings stated as defects. |
+   | `suggestions` | **Suggestions**, as-is. Unverified by design, so never phrase one as a defect. |
+   | `gaps` | **Suggestions**, phrased as coverage this review did not reach. |
+   | `dropped` | **Nowhere in the review.** Report to the user only (step 3). |
+   | `rejected` | **Nowhere in the review.** Report to the user only (step 3). |
+
    - Every change request follows `review-pr`'s **Writing Actionable Change Requests** — anchored to code, constraints in the same bullet as the imperative, retentions stated as checkable assertions, end state described. The schema's `change` / `keep` / `doneWhen` fields map directly onto that format.
-   - `gaps` go under Suggestions, phrased as coverage the review did not reach — never as findings, since they were not verified.
-   - Verdict: `REQUEST_CHANGES` if any confirmed blocker survived, else `COMMENT` if any confirmed issue, else `APPROVE`.
+   - Verdict: `REQUEST_CHANGES` if any confirmed blocker survived, else `COMMENT` if any confirmed issue, else `APPROVE`. `dropped` findings never affect the verdict — an unverified claim is not evidence.
 
 3. **Preview the review for the user.** Output the full review as plain markdown text in the conversation. Do not skip this. Do not substitute a tool-call preview.
 
-   Report alongside it: the tier and why it was chosen, `verify-agent` used, how many findings were refuted and dropped, and anything dropped unverified by the per-lens cap.
+   Report alongside it, outside the review body:
+   - the tier and why it was chosen, and the `verify-agent` used
+   - `stats.refuted` — how many candidate findings were refuted and dropped
+   - `stats.unverified` — anything the per-lens cap left unverified, **listed explicitly**. If this is non-zero, say so plainly: the review is not exhaustive, and raising `MAX_VERIFY_PER_LENS` or re-running that lens is the fix.
 
 4. **Post only after explicit approval.** Do not call any GitHub write tool before the user approves this specific review. A prior approval, a plan that mentioned posting, or this skill's own existence does not count.
 
@@ -435,3 +202,4 @@ Reviewed with the [review-pr-workflow skill](https://github.com/yearn/webops/blo
 - Verification removes findings and never adds them — the critic phase is the only thing that pushes back on under-review.
 - Refuted findings are worth reporting to the user even though they never reach the author. A pattern in what gets refuted is a signal that a lens prompt needs tuning.
 - If `codex` is requested but missing, say so and fall back to `claude`. Never silently substitute a verifier.
+- Editing `workflow.js`: it is plain JS in an async context — no TypeScript, and `Date.now()` / `Math.random()` / `new Date()` throw, because they would break workflow resume. `scripts/check-workflow.mjs` exercises the control flow against stub agents; run it after any change.
