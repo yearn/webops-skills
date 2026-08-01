@@ -97,6 +97,8 @@ The failure that matters is under-reviewing a small dangerous diff, not overspen
 
 Suggestions get zero votes on purpose: they are non-blocking, so a wrong one costs a moment of the author's attention rather than a wasted round trip. Verification budget goes to claims that can block a merge.
 
+Advisory findings also get zero votes, for the opposite reason. A pinned version either falls inside a published advisory's affected range or it does not — that is a registry fact, not a judgement call. Sending one to a refuter only invites an argument about whether the app's configuration makes it exploitable, which is the wrong question: the remedy is the same patch bump either way, and the same claim can be refuted on one run and confirmed on the next. Any finding carrying an `advisory` identifier skips verification and is reported as a version fact.
+
 ---
 
 ## Phase 1–3 — The workflow
@@ -132,12 +134,12 @@ Pass these as real JSON values, never a JSON-encoded string.
 
 | field | contents |
 |-------|----------|
-| `confirmed` | Findings that survived verification. These become Issues. |
+| `confirmed` | Findings that survived verification, plus advisory findings, which skip it. These become Issues. Advisory entries have `votes: 0` and an `advisory` id. |
 | `rejected` | Refuted findings, with the refutation reason. **Never shown to the author** — report to the user only. |
 | `dropped` | Material findings the per-lens cap left unverified. Not publishable as-is. |
 | `suggestions` | Non-blocking findings, passed through unverified by design. |
 | `gaps` | Critic's coverage gaps (`full` tier only). |
-| `stats` | `{ tier, verifyAgent, lenses, confirmed, refuted, unverified }` |
+| `stats` | `{ tier, verifyAgent, lenses, confirmed, refuted, unverified, advisories }` |
 
 ### Cost
 
@@ -156,7 +158,7 @@ Agent count scales with findings, not diff size. A PR yielding 2 blockers and 5 
 
    | field | goes to |
    |-------|---------|
-   | `confirmed` | **Issues.** The only findings stated as defects. |
+   | `confirmed` | **Issues.** The only findings stated as defects. State an entry with an `advisory` id as a version fact — package, pinned version, severity, affected range, first patched version — and say plainly if it is not exploitable in this codebase. Do not drop it on that basis. |
    | `suggestions` | **Suggestions**, as-is. Unverified by design, so never phrase one as a defect. |
    | `gaps` | **Suggestions**, phrased as coverage this review did not reach. |
    | `dropped` | **Nowhere in the review.** Report to the user only (step 3). |
@@ -170,6 +172,7 @@ Agent count scales with findings, not diff size. A PR yielding 2 blockers and 5 
    Report alongside it, outside the review body:
    - the tier and why it was chosen, and the `verify-agent` used
    - `stats.refuted` — how many candidate findings were refuted and dropped
+   - `stats.advisories` — how many confirmed findings bypassed verification as version facts
    - `stats.unverified` — anything the per-lens cap left unverified, **listed explicitly**. If this is non-zero, say so plainly: the review is not exhaustive, and raising `MAX_VERIFY_PER_LENS` or re-running that lens is the fix.
 
 4. **Post only after explicit approval.** Do not call any GitHub write tool before the user approves this specific review. A prior approval, a plan that mentioned posting, or this skill's own existence does not count.
