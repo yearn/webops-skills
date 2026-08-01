@@ -51,6 +51,10 @@ const MAX_VERIFY_PER_LENS = 4
 const MATERIAL = ['blocker', 'issue']
 const SEVERITY_RANK = { blocker: 0, issue: 1, suggestion: 2 }
 
+// A finding carrying a published advisory id. These bypass verification — see the
+// split stage in the Phase 1-2 pipeline for why.
+const isAdvisory = f => Boolean(f.advisory && f.advisory.trim() && f.advisory.trim() !== 'none')
+
 const CONTEXT = `
 PR ${pr.repo}#${pr.number}: ${pr.title}
 
@@ -104,7 +108,15 @@ fix — not pre-existing issues elsewhere in the repo.`,
     prompt: `Newly added dependencies: ${newDeps.join(', ') || '(none)'}.
 For each, evaluate against the npm-policy skill's criteria and give a clear
 APPROVED or REJECTED with a one-line reason. If there are no new dependencies,
-return zero findings — do not manufacture any.`,
+return zero findings — do not manufacture any.
+
+When a pinned version falls inside a published advisory's affected range, set
+"advisory" to the identifier (e.g. GHSA-xxxx-xxxx-xxxx) and state the finding as
+a version fact: package, pinned version, severity, affected range, first patched
+version. Do not weigh whether the app's configuration makes it exploitable, and
+do not drop the finding because it is not — the remedy is the same patch bump
+either way. Say so plainly in the claim if you believe it is unreachable today,
+but still report it.`,
   },
   {
     key: 'clarity',
@@ -141,6 +153,7 @@ const FINDINGS_SCHEMA = {
           change: { type: 'string', description: 'The precise edit requested.' },
           keep: { type: 'string', description: 'What must NOT change, as a checkable assertion. Empty if nothing applies.' },
           doneWhen: { type: 'string', description: 'Observable acceptance criteria.' },
+          advisory: { type: 'string', description: 'Published advisory identifier (GHSA/CVE) when this finding is a pinned version inside an advisory\'s affected range. Empty otherwise.' },
         },
       },
     },
@@ -291,9 +304,17 @@ const reviewed = await pipeline(
   (result, lens) => {
     const found = (result && result.findings) || []
     const suggestions = found.filter(f => !MATERIAL.includes(f.severity))
-    const material = found
-      .filter(f => MATERIAL.includes(f.severity))
-      .sort((a, b) => (SEVERITY_RANK[a.severity] ?? 9) - (SEVERITY_RANK[b.severity] ?? 9))
+
+    // Advisory findings are registry facts, not judgement calls: a pinned version
+    // either falls in a published affected range or it does not. Sending them to a
+    // refuter only invites an exploitability argument, which is the wrong question
+    // — the remedy is the same patch bump either way, and the same claim can be
+    // refuted one run and confirmed the next. They skip verification and are
+    // reported as facts.
+    const material = found.filter(f => MATERIAL.includes(f.severity) && !isAdvisory(f))
+    const advisories = found.filter(f => MATERIAL.includes(f.severity) && isAdvisory(f))
+
+    material.sort((a, b) => (SEVERITY_RANK[a.severity] ?? 9) - (SEVERITY_RANK[b.severity] ?? 9))
 
     const toVerify = material.slice(0, MAX_VERIFY_PER_LENS)
     const dropped = material.slice(MAX_VERIFY_PER_LENS)
@@ -301,14 +322,23 @@ const reviewed = await pipeline(
     if (dropped.length) {
       log(`lens ${lens.key}: ${material.length} material findings, verifying top ${toVerify.length} by severity — ${dropped.length} carried through unverified`)
     }
+    if (advisories.length) {
+      log(`lens ${lens.key}: ${advisories.length} advisory finding(s) reported as version facts, not sent to verification`)
+    }
 
-    return { lens: lens.key, toVerify, dropped, suggestions }
+    return { lens: lens.key, toVerify, dropped, suggestions, advisories }
   },
 
-  async ({ lens, toVerify, dropped, suggestions }) => {
+  async ({ lens, toVerify, dropped, suggestions, advisories }) => {
     const judged = (await parallel(toVerify.map(f => () => judge(f, lens)))).filter(Boolean)
     return {
-      judged,
+      judged: judged.concat(advisories.map(f => ({
+        ...f,
+        lens,
+        survived: true,
+        votes: 0,
+        why: `advisory ${f.advisory} — reported as a version fact; exploitability deliberately not verified`,
+      }))),
       dropped: dropped.map(f => ({ ...f, lens })),
       suggestions: suggestions.map(f => ({ ...f, lens })),
     }
@@ -322,7 +352,9 @@ const rejected = judged.filter(f => !f.survived)
 const dropped = lensResults.flatMap(r => r.dropped)
 const suggestions = lensResults.flatMap(r => r.suggestions)
 
-log(`${confirmed.length} confirmed, ${rejected.length} refuted and dropped, ${dropped.length} unverified past the cap, ${suggestions.length} suggestions`)
+const advisories = confirmed.filter(isAdvisory)
+
+log(`${confirmed.length} confirmed (${advisories.length} advisory fact${advisories.length === 1 ? '' : 's'}), ${rejected.length} refuted and dropped, ${dropped.length} unverified past the cap, ${suggestions.length} suggestions`)
 
 // ---------------------------------------------------------------------------
 // Phase 3: what did the review miss? Verification only ever removes findings.
@@ -360,5 +392,6 @@ return {
     confirmed: confirmed.length,
     refuted: rejected.length,
     unverified: dropped.length,
+    advisories: advisories.length,
   },
 }
