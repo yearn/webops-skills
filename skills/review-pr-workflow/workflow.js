@@ -12,10 +12,21 @@ export const meta = {
 // Inputs. See SKILL.md "Invoking the workflow" for how the main loop builds these.
 // ---------------------------------------------------------------------------
 
-if (!args || !args.pr) {
+// Some hosts hand `args` through as a JSON-encoded string rather than a value.
+// Destructuring a string yields undefined for every field, so normalise first.
+let input = args
+if (typeof input === 'string') {
+  try {
+    input = JSON.parse(input)
+  } catch {
+    throw new Error('review-pr-workflow: args arrived as a string that is not valid JSON')
+  }
+}
+
+if (!input || !input.pr) {
   throw new Error('review-pr-workflow: args.pr is required — see SKILL.md "Invoking the workflow"')
 }
-if (args.tier === 'skip') {
+if (input.tier === 'skip') {
   throw new Error('review-pr-workflow: tier "skip" must not reach the workflow — run review-pr inline instead')
 }
 
@@ -29,7 +40,7 @@ const {
   newDeps = [],
   tier = 'full',
   verifyAgent = 'claude',
-} = args
+} = input
 
 // Verify at most this many findings per lens, highest severity first. Bounds the
 // agent count; the selection is deterministic so resumes hit cache.
