@@ -154,7 +154,9 @@ Agent count scales with findings, not diff size. A PR yielding 2 blockers and 5 
    - Save screenshots to `/tmp/pr-review-{pr-number}/`, never inside the repo.
    - Skip entirely when the PR touches no UI.
 
-2. **Assemble the review** using `review-pr`'s Review Format. Each return field has exactly one destination — do not mix them:
+2. **Merge duplicate findings first.** The lenses overlap on purpose, so one defect routinely arrives two to four times in different words. That is a confidence signal, not four defects. Collapse `confirmed` entries naming the same defect at the same anchor into one, keeping the highest severity, the clearest `change`, and the strictest `doneWhen`. Report the collapse in step 4, never in the review body — vote counts are your evidence, not the author's.
+
+3. **Assemble the review** using `review-pr`'s Review Format. Each return field has exactly one destination — do not mix them:
 
    | field | goes to |
    |-------|---------|
@@ -167,17 +169,21 @@ Agent count scales with findings, not diff size. A PR yielding 2 blockers and 5 
    - Every change request follows `review-pr`'s **Writing Actionable Change Requests** — anchored to code, constraints in the same bullet as the imperative, retentions stated as checkable assertions, end state described. The schema's `change` / `keep` / `doneWhen` fields map directly onto that format.
    - Verdict: `REQUEST_CHANGES` if any confirmed blocker survived, else `COMMENT` if any confirmed issue, else `APPROVE`. `dropped` findings never affect the verdict — an unverified claim is not evidence.
 
-3. **Preview the review for the user.** Output the full review as plain markdown text in the conversation. Do not skip this. Do not substitute a tool-call preview.
+   **Length is a correctness property here, not a matter of taste.** A review the author skims is a review that gets partly implemented, and the blocker is what gets skipped. Hold to all of these:
 
-   Report alongside it, outside the review body:
-   - the tier and why it was chosen, and the `verify-agent` used
-   - `stats.refuted` — how many candidate findings were refuted and dropped
-   - `stats.advisories` — how many confirmed findings bypassed verification as version facts
-   - `stats.unverified` — anything the per-lens cap left unverified, **listed explicitly**. If this is non-zero, say so plainly: the review is not exhaustive, and raising `MAX_VERIFY_PER_LENS` or re-running that lens is the fix.
+   - **One finding, one bullet.** Claim in a single sentence, then `Change:` / `Keep:` / `Done when:`, one line each. Drop `Keep:` when nothing genuinely needs protecting — an empty retention is noise.
+   - **Never paste `evidence` into the review.** That field is the agent's justification *to you*, and you already accepted it by confirming the finding. The author needs the anchor and at most one short quote of the offending code — not the reasoning chain, not the spec excerpt, not the git archaeology.
+   - **Budget roughly 60 words per finding and 400 for the whole body.** Over budget means you are re-arguing a verdict you have already reached. Cut the argument, keep the instruction.
+   - **No preamble, no restatement of the PR.** At most one sentence on what is already right. The author knows what they built.
+   - The Review Format's bullet shape is a **ceiling, not a starting point**. Prose paragraphs under a finding mean you have blown past it.
 
-4. **Post only after explicit approval.** Do not call any GitHub write tool before the user approves this specific review. A prior approval, a plan that mentioned posting, or this skill's own existence does not count.
+4. **Preview the review for the user.** Output the full review as plain markdown text in the conversation. Do not skip this. Do not substitute a tool-call preview.
 
-5. **Cleanup** — delete every screenshot created during verification.
+   Then, in **no more than four lines** outside the review body, report counts only: tier and why, `verify-agent`, `stats.refuted`, `stats.advisories`, any duplicate collapse from step 2, and `stats.unverified`. One exception to the line budget — if `stats.unverified` is non-zero, list those findings explicitly and say plainly that the review is not exhaustive; raising `MAX_VERIFY_PER_LENS` or re-running that lens is the fix.
+
+5. **Post only after explicit approval.** Do not call any GitHub write tool before the user approves this specific review. A prior approval, a plan that mentioned posting, or this skill's own existence does not count.
+
+6. **Cleanup** — delete every screenshot created during verification.
 
 ## User Confirmation
 
@@ -202,6 +208,7 @@ Reviewed with the [review-pr-workflow skill](https://github.com/yearn/webops/blo
 ## Notes
 
 - This skill is expensive. Prefer `review-pr` for routine PRs; the tier detector exists to keep you honest about that.
+- Brevity is part of the deliverable, and this skill fights you on it: the workflow returns agent-facing prose — `claim` and `evidence` written at length to convince *you* a finding is real. Render that verbatim and the author gets a wall of text. More lenses must not mean a longer review.
 - Verification removes findings and never adds them — the critic phase is the only thing that pushes back on under-review.
 - Refuted findings are worth reporting to the user even though they never reach the author. A pattern in what gets refuted is a signal that a lens prompt needs tuning.
 - If `codex` is requested but missing, say so and fall back to `claude`. Never silently substitute a verifier.
