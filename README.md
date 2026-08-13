@@ -50,6 +50,7 @@ Custom skills for Claude Code and OpenAI Codex used by the WebOps team at Yearn 
 |-------|-------------|
 | `find-create-block` | Estimate contract creation block via binary search on archive RPC |
 | `npm-policy` | Evaluate npm packages against dependency policy |
+| `post-artifact` | Publish report files to Yearn Artifacts and return shareable URLs |
 | `create-commit` | Git commit message guidelines |
 | `create-pr` | PR title and description template |
 | `review-pr` | Review PRs and post feedback via GitHub tooling |
@@ -119,4 +120,5 @@ After setup, invoke skills with slash commands in Claude Code or by naming the s
 /npm-policy axios
 /create-commit
 /review-pr 123
+/post-artifact ./REPORT.md
 ```
