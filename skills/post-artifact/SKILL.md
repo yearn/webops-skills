@@ -27,6 +27,19 @@ It prints JSON:
 Report the `url` verbatim. It is the only handle on the report: the stored name
 is random, there is no index, and nothing else records where the report went.
 
+## Retention
+
+Reports expire after 30 days by default. Pass `--retention` only when the user
+requests another lifetime or the surrounding workflow already specifies one:
+
+```bash
+bun run post-artifact --file ./REPORT.md --retention 7d
+```
+
+Accepted values are `1d`, `7d`, `30d`, `90d`, `1y`, and `archive`. Use
+`archive` only when the user explicitly requests no automatic expiration;
+never infer it. Do not ask about retention when the 30-day default is suitable.
+
 ## Provenance
 
 Pass what the report describes so the bucket is not a pile of hex names. Every
@@ -55,7 +68,7 @@ publish, and publishing fails without it.
 - Markdown is rendered as HTML and automatically gets a 1200×630 social
   preview image. Other file types are served as stored bytes.
 - The extension decides how the report is served, so keep it on `--file`.
-- Reports expire 30 days after publish.
+- The service returns a tier-prefixed URL when a non-default retention is used.
 - Reads are not authenticated. Anyone holding the URL can read the report, so
   treat it as a secret and do not post it anywhere public.
 - Publishing the same file twice creates two reports. Nothing is overwritten.

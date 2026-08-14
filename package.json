@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "install-skills": "for dir in skills/*/; do [ -f \"$dir/package.json\" ] && (cd \"$dir\" && echo \"Installing deps for $dir...\" && bun install) || true; done && ./skills/export.sh",
-    "post-artifact": "bun skills/post-artifact/scripts/post-artifact.ts"
+    "post-artifact": "bun skills/post-artifact/scripts/post-artifact.ts",
+    "test:post-artifact": "bun test skills/post-artifact/test"
   }
 }
