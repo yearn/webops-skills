@@ -4,6 +4,8 @@ import { basename } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const DEFAULT_URL = "https://artifacts.yearn.dev";
+export const RETENTIONS = ["1d", "7d", "30d", "90d", "1y", "archive"] as const;
+export type Retention = (typeof RETENTIONS)[number];
 
 export type PostArtifactInput = {
   file: string;
@@ -12,6 +14,7 @@ export type PostArtifactInput = {
   ref?: string;
   commit?: string;
   name?: string;
+  retention?: Retention;
   serviceUrl?: string;
   apiKey: string;
 };
@@ -37,7 +40,16 @@ export function buildHeaders(input: PostArtifactInput): Record<string, string> {
 
 export function publishUrl(input: PostArtifactInput): string {
   const name = input.name || basename(input.file);
-  return `${(input.serviceUrl || DEFAULT_URL).replace(/\/+$/, "")}/${encodeURIComponent(name)}`;
+  const base = (input.serviceUrl || DEFAULT_URL).replace(/\/+$/, "");
+  const prefix = input.retention && input.retention !== "30d" ? `/${input.retention}` : "";
+  return `${base}${prefix}/${encodeURIComponent(name)}`;
+}
+
+export function parseRetention(value = "30d"): Retention {
+  if (!RETENTIONS.includes(value as Retention)) {
+    throw new Error(`invalid --retention: expected ${RETENTIONS.join(", ")}`);
+  }
+  return value as Retention;
 }
 
 export async function postArtifact(
@@ -82,6 +94,7 @@ export function inputFromArgs(
     ref: args.ref,
     commit: args.commit,
     name: args.name,
+    retention: parseRetention(args.retention),
     serviceUrl: args.url || env.ARTIFACTS_URL,
     apiKey
   };
