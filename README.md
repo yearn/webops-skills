@@ -53,8 +53,10 @@ Custom skills for Claude Code and OpenAI Codex used by the WebOps team at Yearn 
 | `post-artifact` | Publish report files to Yearn Artifacts and return shareable URLs |
 | `create-commit` | Git commit message guidelines |
 | `create-pr` | PR title and description template |
+| `my-reviews` | List open PRs across GitHub where you are a requested reviewer |
 | `review-pr` | Review PRs and post feedback via GitHub tooling |
 | `review-pr-workflow` | Multi-agent PR review — fan-out lenses, adversarial verification of every finding |
+| `review-pr-workflow-batch` | Run `review-pr-workflow` across several PRs — one worktree and one resumable session each |
 | `create-skill` | Create new agent skills |
 | `create-spec` | Create work specifications for features |
 | `implement-spec` | Implement a spec from GitHub issue or file |
