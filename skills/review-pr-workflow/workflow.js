@@ -1,9 +1,9 @@
 export const meta = {
   name: 'review-pr-workflow',
-  description: 'Fan out PR review lenses, adversarially verify each material claim, then critique for gaps',
+  description: 'Fan out PR review lenses, verify every finding that can reach the author, then critique for gaps',
   phases: [
     { title: 'Review', detail: 'one agent per review lens' },
-    { title: 'Verify', detail: 'refute each material finding' },
+    { title: 'Verify', detail: 'refute each finding; advisories checked against the registry' },
     { title: 'Critic', detail: 'what did the review miss' },
   ],
 }
@@ -46,13 +46,15 @@ const {
 // agent count; the selection is deterministic so resumes hit cache.
 const MAX_VERIFY_PER_LENS = 4
 
-// Only these severities are worth an agent. Suggestions are non-blocking and pass
-// through unverified, clearly labelled as such.
+// Only these severities reach the author, and only after verification. "suggestion"
+// is a discard bucket, not an output channel: it exists so a lens holding a
+// non-defect observation has somewhere to put it other than `issue`. Nothing
+// labelled suggestion is returned, rendered, or posted — see the split stage below.
 const MATERIAL = ['blocker', 'issue']
-const SEVERITY_RANK = { blocker: 0, issue: 1, suggestion: 2 }
+const SEVERITY_RANK = { blocker: 0, issue: 1 }
 
-// A finding carrying a published advisory id. These bypass verification — see the
-// split stage in the Phase 1-2 pipeline for why.
+// A finding carrying a published advisory id. These are verified too, but against
+// the registry rather than by a refuter — see advisoryCheckPrompt.
 const isAdvisory = f => Boolean(f.advisory && f.advisory.trim() && f.advisory.trim() !== 'none')
 
 const CONTEXT = `
@@ -76,6 +78,12 @@ ${lintOutput || '(clean)'}
 The PR branch is already checked out. You are READ-ONLY: do not checkout, commit,
 stash, start a dev server, or modify any file.
 Read the diff with: git diff ${baseRef}...HEAD
+
+Report defects only: something that is wrong, missing, or unsafe, with a
+consequence you can name. Polish, preference, refactors, and "this would read
+better as" are not findings. Give those severity "suggestion" and they are
+discarded unread. Do not label one "issue" to get it seen — an unverified opinion
+landing on the author is the specific failure this review exists to prevent.
 
 For every finding, run git blame on the offending line and report the short hash
 of the commit that introduced it as "provenance". If that commit is not in
@@ -124,14 +132,17 @@ a version fact: package, pinned version, severity, affected range, first patched
 version. Do not weigh whether the app's configuration makes it exploitable, and
 do not drop the finding because it is not — the remedy is the same patch bump
 either way. Say so plainly in the claim if you believe it is unreachable today,
-but still report it.`,
+but still report it. The advisory id is checked against the registry before the
+finding is published, so name one only when you have the range in front of you.`,
   },
   {
     key: 'clarity',
-    prompt: `Find code that will be expensive to maintain: misleading names,
-duplicated logic that should be shared, functions doing several unrelated things,
-and missing tests for behavior this PR introduces. Be selective — raise only what
-you would genuinely block or comment on, never nitpicks.`,
+    prompt: `Find maintenance defects this PR introduces: behavior added with no
+test covering it, logic duplicated such that one copy will silently diverge from
+the other, and names or types that state something the code does not do. Every
+finding needs a consequence you can name — what breaks, for whom, when. A cleaner
+structure you would prefer is not a consequence. Returning zero findings is the
+normal outcome for this lens.`,
   },
 ]
 
@@ -155,12 +166,12 @@ const FINDINGS_SCHEMA = {
         properties: {
           file: { type: 'string' },
           line: { type: 'number' },
-          severity: { type: 'string', enum: ['blocker', 'issue', 'suggestion'] },
+          severity: { type: 'string', enum: ['blocker', 'issue', 'suggestion'], description: 'blocker and issue are defects and are the only severities that reach anyone. "suggestion" is a discard bucket for non-defect observations — it is dropped unread, so use it freely rather than inflating an opinion to "issue".' },
           claim: { type: 'string', description: 'One sentence: what is wrong.' },
           evidence: { type: 'string', description: 'The specific code that makes this true.' },
           doneWhen: { type: 'string', description: 'Observable acceptance criteria the author can check without the reviewer. Constraints, not edits.' },
           provenance: { type: 'string', description: 'Short hash of the commit that introduced the offending line (git blame), or "pre-existing <hash>" when it predates the PR merge-base.' },
-          advisory: { type: 'string', description: 'Published advisory identifier (GHSA/CVE) when this finding is a pinned version inside an advisory\'s affected range. Empty otherwise.' },
+          advisory: { type: 'string', description: 'Published advisory identifier (GHSA/CVE) when this finding is a pinned version inside an advisory\'s affected range. Empty otherwise. Verified against the registry, not by an exploitability argument — a range you cannot cite gets the finding refuted.' },
         },
       },
     },
@@ -219,9 +230,45 @@ costs more than a missed one. If the claim is directionally right but inaccurate
 stated, set refuted=false and put the accurate version in "correction".`
 }
 
+// An advisory finding is a registry claim, not a judgement call, so refuting it by
+// arguing exploitability is the wrong question — the remedy is the same patch bump
+// either way. It still gets verified: the checkable part is whether the pinned
+// version really falls inside the named advisory's affected range. Nothing reaches
+// the author unverified, including this.
+function advisoryCheckPrompt(f) {
+  return `${CONTEXT}
+
+A PR reviewer reported this dependency as sitting inside a published advisory's
+affected range. Check the registry fact. Do not argue exploitability.
+
+  Advisory: ${f.advisory}
+  File: ${f.file}:${f.line}
+  Claim: ${f.claim}
+  Stated evidence: ${f.evidence}
+  Provenance: ${f.provenance}
+
+Refute it if any of these is false: the advisory identifier exists and is
+published; the package it covers is the package this finding names; the version
+pinned in this PR's manifest or lockfile falls inside the advisory's affected
+range; and this PR is what introduced or kept that pin.
+
+Do NOT refute because the vulnerable path looks unreachable, because the app's
+configuration makes it unexploitable, or because the severity seems overstated —
+those are not the claim. If the version fact holds but the surrounding wording is
+wrong, set refuted=false and put the accurate version fact in "correction":
+package, pinned version, severity, affected range, first patched version.
+
+Look it up with \`gh api /advisories/${f.advisory}\` for a GHSA id, or
+\`gh api "/advisories?cve_id=${f.advisory}"\` for a CVE id (the path form 404s on
+CVEs; the list form returns the matching GHSA entry). For npm packages
+\`npm audit --json\` in the repo also works. Default to refuted=true when you
+cannot confirm the range from one of those. An unchecked advisory claim must not
+reach the PR author.`
+}
+
 // codex writes its final message to a file rather than stdout, so nothing has to
 // parse progress output. --output-schema constrains that message to VERDICT_SCHEMA.
-function codexVerifyPrompt(f) {
+function codexVerifyPrompt(f, inner) {
   return `Verify a code review claim by shelling out to the codex CLI, then return
 codex's verdict — not your own opinion — in the required schema.
 
@@ -233,7 +280,7 @@ Steps:
 
 2. Write this prompt verbatim to "$PROMPT":
 ---BEGIN PROMPT---
-${refutePrompt(f)}
+${inner}
 ---END PROMPT---
 
 3. Write this JSON Schema verbatim to "$SCHEMA":
@@ -252,14 +299,20 @@ happened>". An unverified claim must not reach the PR author.`
 
 function verifyOne(f, vote) {
   const suffix = vote === undefined ? '' : `#${vote + 1}`
-  if (verifyAgent === 'codex') {
-    return agent(codexVerifyPrompt(f), {
+  const prompt = isAdvisory(f) ? advisoryCheckPrompt(f) : refutePrompt(f)
+  // Advisory checks are a registry lookup, and `codex exec --sandbox read-only`
+  // has no network (DNS fails inside it). Sent there, every advisory would hit the
+  // "cannot confirm the range → refuted" default and vanish as a count. Codex buys
+  // model independence for judgement calls; a registry fact has nothing to be
+  // independent about, so advisories always verify with the session agent.
+  if (verifyAgent === 'codex' && !isAdvisory(f)) {
+    return agent(codexVerifyPrompt(f, prompt), {
       label: `codex-verify:${f.file}:${f.line}${suffix}`,
       phase: 'Verify',
       schema: VERDICT_SCHEMA,
     })
   }
-  return agent(refutePrompt(f), {
+  return agent(prompt, {
     label: `verify:${f.file}:${f.line}${suffix}`,
     phase: 'Verify',
     schema: VERDICT_SCHEMA,
@@ -268,7 +321,9 @@ function verifyOne(f, vote) {
 
 async function judge(f, lens) {
   // Blockers get an odd-numbered panel at full tier; majority refutes kills it.
-  const votes = (tier === 'full' && f.severity === 'blocker')
+  // An advisory is a lookup with one right answer, so a panel would only buy three
+  // copies of the same registry query — one check, and it must pass.
+  const votes = (tier === 'full' && f.severity === 'blocker' && !isAdvisory(f))
     ? (await parallel([0, 1, 2].map(i => () => verifyOne(f, i)))).filter(Boolean)
     : [await verifyOne(f)].filter(Boolean)
 
@@ -308,48 +363,51 @@ const reviewed = await pipeline(
     schema: FINDINGS_SCHEMA,
   }),
 
-  // Split material findings from suggestions, then cap. Whatever the cap drops is
+  // Discard non-defects, split the rest, then cap. Whatever the cap drops is
   // carried forward, not discarded — a silent truncation reads as "nothing found".
   (result, lens) => {
     const found = (result && result.findings) || []
-    const suggestions = found.filter(f => !MATERIAL.includes(f.severity))
 
-    // Advisory findings are registry facts, not judgement calls: a pinned version
-    // either falls in a published affected range or it does not. Sending them to a
-    // refuter only invites an exploitability argument, which is the wrong question
-    // — the remedy is the same patch bump either way, and the same claim can be
-    // refuted one run and confirmed the next. They skip verification and are
-    // reported as facts.
-    const material = found.filter(f => MATERIAL.includes(f.severity) && !isAdvisory(f))
-    const advisories = found.filter(f => MATERIAL.includes(f.severity) && isAdvisory(f))
+    // The discard bucket. Counted so the user can see what the lenses wanted to
+    // say, then dropped: it reaches neither the assembler nor the author. An
+    // unverified non-blocking note still costs the author a context switch to
+    // read, judge and answer, and the wrong ones cost the round trip they were
+    // supposed to be too cheap to matter.
+    const discarded = found.filter(f => !MATERIAL.includes(f.severity))
+
+    // Advisory findings verify like everything else — nothing reaches the author
+    // unverified. What differs is the question asked: advisoryCheckPrompt checks the
+    // version against the published affected range instead of inviting an
+    // exploitability argument, which is the wrong question since the remedy is the
+    // same patch bump either way.
+    const material = found.filter(f => MATERIAL.includes(f.severity))
 
     material.sort((a, b) => (SEVERITY_RANK[a.severity] ?? 9) - (SEVERITY_RANK[b.severity] ?? 9))
 
-    const toVerify = material.slice(0, MAX_VERIFY_PER_LENS)
-    const dropped = material.slice(MAX_VERIFY_PER_LENS)
+    // The cap exists to bound refuter panels. An advisory is one cheap registry
+    // check, and a lockfile bump routinely carries more than MAX_VERIFY_PER_LENS of
+    // them — every one is verified, none is ever dropped by the cap.
+    const advisories = material.filter(isAdvisory)
+    const judgeable = material.filter(f => !isAdvisory(f))
+    const toVerify = advisories.concat(judgeable.slice(0, MAX_VERIFY_PER_LENS))
+    const dropped = judgeable.slice(MAX_VERIFY_PER_LENS)
 
     if (dropped.length) {
       log(`lens ${lens.key}: ${material.length} material findings, verifying top ${toVerify.length} by severity — ${dropped.length} carried through unverified`)
     }
-    if (advisories.length) {
-      log(`lens ${lens.key}: ${advisories.length} advisory finding(s) reported as version facts, not sent to verification`)
+    if (discarded.length) {
+      log(`lens ${lens.key}: ${discarded.length} non-defect finding(s) discarded before verification — reported to you as a count only`)
     }
 
-    return { lens: lens.key, toVerify, dropped, suggestions, advisories }
+    return { lens: lens.key, toVerify, dropped, discarded: discarded.length }
   },
 
-  async ({ lens, toVerify, dropped, suggestions, advisories }) => {
+  async ({ lens, toVerify, dropped, discarded }) => {
     const judged = (await parallel(toVerify.map(f => () => judge(f, lens)))).filter(Boolean)
     return {
-      judged: judged.concat(advisories.map(f => ({
-        ...f,
-        lens,
-        survived: true,
-        votes: 0,
-        why: `advisory ${f.advisory} — reported as a version fact; exploitability deliberately not verified`,
-      }))),
+      judged,
       dropped: dropped.map(f => ({ ...f, lens })),
-      suggestions: suggestions.map(f => ({ ...f, lens })),
+      discarded,
     }
   },
 )
@@ -359,11 +417,11 @@ const judged = lensResults.flatMap(r => r.judged)
 const confirmed = judged.filter(f => f.survived)
 const rejected = judged.filter(f => !f.survived)
 const dropped = lensResults.flatMap(r => r.dropped)
-const suggestions = lensResults.flatMap(r => r.suggestions)
+const discarded = lensResults.reduce((n, r) => n + (r.discarded || 0), 0)
 
 const advisories = confirmed.filter(isAdvisory)
 
-log(`${confirmed.length} confirmed (${advisories.length} advisory fact${advisories.length === 1 ? '' : 's'}), ${rejected.length} refuted and dropped, ${dropped.length} unverified past the cap, ${suggestions.length} suggestions`)
+log(`${confirmed.length} confirmed (${advisories.length} advisory fact${advisories.length === 1 ? '' : 's'}), ${rejected.length} refuted and dropped, ${dropped.length} unverified past the cap, ${discarded} non-defect discarded`)
 
 // ---------------------------------------------------------------------------
 // Phase 3: what did the review miss? Verification only ever removes findings.
@@ -392,7 +450,6 @@ return {
   confirmed,
   rejected: rejected.map(f => ({ file: f.file, line: f.line, claim: f.claim, why: f.why })),
   dropped,
-  suggestions,
   gaps: (gaps && gaps.gaps) || [],
   stats: {
     tier,
@@ -401,6 +458,7 @@ return {
     confirmed: confirmed.length,
     refuted: rejected.length,
     unverified: dropped.length,
+    discarded,
     advisories: advisories.length,
   },
 }

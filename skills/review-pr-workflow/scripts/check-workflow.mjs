@@ -16,7 +16,9 @@ const mkFinding = (lens, i, severity) => ({
   claim: `${lens} claim ${i}`, evidence: 'ev', doneWhen: 'dw', provenance: 'abc1234',
 })
 
-// Enough material findings on `bugs` to trip MAX_VERIFY_PER_LENS.
+// Enough material findings on `bugs` to trip MAX_VERIFY_PER_LENS. The two
+// `suggestion` entries must be discarded outright — the workflow returns no
+// channel that could carry them to the author.
 const FAKE = {
   spec: [mkFinding('spec', 1, 'blocker'), mkFinding('spec', 2, 'suggestion')],
   bugs: [
@@ -25,11 +27,14 @@ const FAKE = {
     mkFinding('bugs', 5, 'issue'), mkFinding('bugs', 6, 'suggestion'),
   ],
   security: [],
-  // Advisory findings must reach `confirmed` without a verifier being spawned.
-  deps: [{ ...mkFinding('deps', 1, 'issue'), advisory: 'GHSA-xxxx-xxxx-xxxx' }],
+  // Advisory findings are verified like everything else — against the registry
+  // rather than by a refuter, but they still spawn a verifier and can be refuted.
+  // Six advisories on one lens — more than MAX_VERIFY_PER_LENS. None may be dropped.
+  deps: [1, 2, 3, 4, 5, 6].map(i => ({ ...mkFinding('deps', i, 'issue'), advisory: `GHSA-xxxx-xxxx-xxx${i}` })),
   clarity: [mkFinding('clarity', 1, 'issue')],
 }
 
+const isAdv = f => Boolean(f.advisory)
 let agentCalls = 0
 let labels = []
 
@@ -93,29 +98,55 @@ check('cap leaves 1 of bugs\' 5 material findings unverified',
   full.dropped.filter(d => d.lens === 'bugs').length === 1,
   JSON.stringify(full.dropped.map(d => d.file)))
 check('capped findings are returned, not discarded', full.dropped.length === 1)
-check('suggestions bypass verification',
-  full.suggestions.length === 2 && !labels.some(l => l?.includes('spec2') || l?.includes('bugs6')),
-  JSON.stringify(full.suggestions.map(s => s.file)))
+check('non-defect findings are discarded — never verified, never returned',
+  full.stats.discarded === 2 &&
+  !('suggestions' in full) &&
+  !labels.some(l => l?.includes('spec2') || l?.includes('bugs6')),
+  JSON.stringify({ discarded: full.stats.discarded, returned: Object.keys(full) }))
 check('blockers get a 3-vote panel',
   full.confirmed.filter(f => f.severity === 'blocker').every(f => f.votes === 3),
   JSON.stringify(full.confirmed.map(f => [f.file, f.votes])))
-check('issues get 1 vote (advisories excluded — they are never verified)',
-  full.confirmed.filter(f => f.severity === 'issue' && !f.advisory).every(f => f.votes === 1),
+check('issues get 1 vote, advisories included',
+  full.confirmed.filter(f => f.severity === 'issue').every(f => f.votes === 1),
   JSON.stringify(full.confirmed.map(f => [f.file, f.votes])))
 check('refuted finding is excluded from confirmed',
   !full.confirmed.some(f => f.file === 'src/bugs3.ts') &&
   full.rejected.some(f => f.file === 'src/bugs3.ts'))
 check('agent labels are unique', new Set(labels).size === labels.length,
   'duplicates: ' + labels.filter((l, i) => labels.indexOf(l) !== i).join(','))
-check('advisory finding is confirmed without a verifier',
-  full.confirmed.some(f => f.file === 'src/deps1.ts' && f.votes === 0) &&
-  !labels.some(l => l?.includes('deps1')),
+check('advisory finding is verified, not waved through',
+  full.confirmed.some(f => f.file === 'src/deps1.ts' && f.votes === 1) &&
+  labels.some(l => l === 'verify:src/deps1.ts:11'),
   JSON.stringify(labels.filter(l => l?.includes('deps'))))
+check('advisory is counted in stats', full.stats.advisories === 6)
+check('advisories are never dropped by the per-lens cap',
+  full.confirmed.filter(isAdv).length === 6 && !full.dropped.some(d => d.lens === 'deps'),
+  JSON.stringify(full.dropped.map(d => d.file)))
 check('critic runs at full tier', full.gaps.length === 1)
+// The contract the whole review rests on: every publishable finding carries at
+// least one verifier verdict. No severity, and no advisory id, is a way around it.
+check('nothing unverified is returned as publishable',
+  full.confirmed.length > 0 && full.confirmed.every(f => f.votes > 0),
+  JSON.stringify(full.confirmed.map(f => [f.file, f.votes, f.advisory])))
 check('stats match payload',
   full.stats.confirmed === full.confirmed.length &&
   full.stats.unverified === full.dropped.length &&
   full.stats.lenses.length === 5)
+
+const codex = await run({ ...BASE, tier: 'full', verifyAgent: 'codex' })
+console.log(`\n[codex verifier] ${agentCalls} agents`)
+// codex's read-only sandbox has no network, so a registry lookup sent there is
+// always "cannot confirm" → refuted. Advisories must bypass codex for the claude
+// verifier; everything else must still go through codex.
+check('codex mode: advisory verifies with claude, not codex',
+  labels.some(l => l === 'verify:src/deps1.ts:11') &&
+  !labels.some(l => l?.startsWith('codex-verify:') && l.includes('deps')),
+  JSON.stringify(labels.filter(l => l?.includes('deps'))))
+check('codex mode: non-advisory findings still verify via codex',
+  labels.some(l => l?.startsWith('codex-verify:')) &&
+  !labels.some(l => l?.startsWith('verify:') && !l.includes('deps')),
+  JSON.stringify(labels.filter(l => l?.includes('verify'))))
+check('codex mode: advisory is confirmed', codex.confirmed.filter(isAdv).every(f => f.votes === 1) && codex.confirmed.filter(isAdv).length === 6)
 
 const light = await run({ ...BASE, tier: 'light' })
 console.log(`\n[light tier] ${agentCalls} agents`)
@@ -125,12 +156,11 @@ check('light gives blockers 1 vote', light.confirmed.every(f => f.votes === 1),
   JSON.stringify(light.confirmed.map(f => [f.file, f.votes])))
 
 const none = await run({ ...BASE, tier: 'full' }, { refuteAll: true })
-check('\n[edge] all-refuted leaves only the advisory confirmed',
-  none.confirmed.length === 1 &&
-  none.confirmed[0].advisory === 'GHSA-xxxx-xxxx-xxxx' &&
-  none.rejected.length > 0,
+check('\n[edge] all-refuted leaves nothing confirmed — the advisory is refutable too',
+  none.confirmed.length === 0 &&
+  none.stats.advisories === 0 &&
+  none.rejected.some(f => f.file === 'src/deps1.ts'),
   JSON.stringify(none.confirmed.map(f => f.file)))
-check('[edge] advisory is counted in stats', none.stats.advisories === 1)
 
 let threw = null
 try { await run({ ...BASE, tier: 'skip' }) } catch (e) { threw = e.message }
