@@ -128,6 +128,21 @@ check('stats match payload',
   full.stats.unverified === full.dropped.length &&
   full.stats.lenses.length === 5)
 
+const codex = await run({ ...BASE, tier: 'full', verifyAgent: 'codex' })
+console.log(`\n[codex verifier] ${agentCalls} agents`)
+// codex's read-only sandbox has no network, so a registry lookup sent there is
+// always "cannot confirm" → refuted. Advisories must bypass codex for the claude
+// verifier; everything else must still go through codex.
+check('codex mode: advisory verifies with claude, not codex',
+  labels.some(l => l === 'verify:src/deps1.ts:11') &&
+  !labels.some(l => l?.startsWith('codex-verify:') && l.includes('deps1')),
+  JSON.stringify(labels.filter(l => l?.includes('deps'))))
+check('codex mode: non-advisory findings still verify via codex',
+  labels.some(l => l?.startsWith('codex-verify:')) &&
+  !labels.some(l => l?.startsWith('verify:') && !l.includes('deps1')),
+  JSON.stringify(labels.filter(l => l?.includes('verify'))))
+check('codex mode: advisory is confirmed', codex.confirmed.some(f => f.file === 'src/deps1.ts' && f.votes === 1))
+
 const light = await run({ ...BASE, tier: 'light' })
 console.log(`\n[light tier] ${agentCalls} agents`)
 check('light runs spec + bugs only', light.stats.lenses.join(',') === 'spec,bugs')

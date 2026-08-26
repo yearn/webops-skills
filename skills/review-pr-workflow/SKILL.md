@@ -34,6 +34,8 @@ A second Claude instance shares the first one's blind spots — it tends to find
 
 Requires the `codex` CLI on PATH. If it is missing, say so and fall back to `claude` — do not silently substitute.
 
+Advisory findings are the one exception: they are always verified by `claude`, whatever `verify-agent` says. The check is a registry lookup (`gh api /advisories/…`), and codex runs in a read-only sandbox with no network, so it could only ever answer "cannot confirm" — which the prompt correctly treats as refuted. There is no independence to buy on a version fact.
+
 ## Requirements
 
 - GitHub tooling with read/write access to PRs and issues

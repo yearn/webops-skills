@@ -51,7 +51,7 @@ const MAX_VERIFY_PER_LENS = 4
 // non-defect observation has somewhere to put it other than `issue`. Nothing
 // labelled suggestion is returned, rendered, or posted — see the split stage below.
 const MATERIAL = ['blocker', 'issue']
-const SEVERITY_RANK = { blocker: 0, issue: 1, suggestion: 2 }
+const SEVERITY_RANK = { blocker: 0, issue: 1 }
 
 // A finding carrying a published advisory id. These are verified too, but against
 // the registry rather than by a refuter — see advisoryCheckPrompt.
@@ -258,9 +258,12 @@ those are not the claim. If the version fact holds but the surrounding wording i
 wrong, set refuted=false and put the accurate version fact in "correction":
 package, pinned version, severity, affected range, first patched version.
 
-Look it up with \`gh api /advisories/${f.advisory}\` (GHSA ids) or
-\`npm audit --json\` in the repo. Default to refuted=true when you cannot confirm the
-range from one of those. An unchecked advisory claim must not reach the PR author.`
+Look it up with \`gh api /advisories/${f.advisory}\` for a GHSA id, or
+\`gh api "/advisories?cve_id=${f.advisory}"\` for a CVE id (the path form 404s on
+CVEs; the list form returns the matching GHSA entry). For npm packages
+\`npm audit --json\` in the repo also works. Default to refuted=true when you
+cannot confirm the range from one of those. An unchecked advisory claim must not
+reach the PR author.`
 }
 
 // codex writes its final message to a file rather than stdout, so nothing has to
@@ -297,7 +300,12 @@ happened>". An unverified claim must not reach the PR author.`
 function verifyOne(f, vote) {
   const suffix = vote === undefined ? '' : `#${vote + 1}`
   const prompt = isAdvisory(f) ? advisoryCheckPrompt(f) : refutePrompt(f)
-  if (verifyAgent === 'codex') {
+  // Advisory checks are a registry lookup, and `codex exec --sandbox read-only`
+  // has no network (DNS fails inside it). Sent there, every advisory would hit the
+  // "cannot confirm the range → refuted" default and vanish as a count. Codex buys
+  // model independence for judgement calls; a registry fact has nothing to be
+  // independent about, so advisories always verify with the session agent.
+  if (verifyAgent === 'codex' && !isAdvisory(f)) {
     return agent(codexVerifyPrompt(f, prompt), {
       label: `codex-verify:${f.file}:${f.line}${suffix}`,
       phase: 'Verify',
