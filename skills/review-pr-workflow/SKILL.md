@@ -1,6 +1,6 @@
 ---
 name: review-pr-workflow
-description: Multi-agent PR review — fans out review lenses, adversarially verifies every material claim before it reaches the author, then posts via the review-pr format after explicit approval
+description: Multi-agent PR review — fans out review lenses, adversarially verifies every claim before it reaches the author, then posts via the review-pr format after explicit approval
 ---
 
 ## Activation Criteria
@@ -89,13 +89,13 @@ The failure that matters is under-reviewing a small dangerous diff, not overspen
 
 ### Tier → workflow shape
 
-| Tier | Review lenses | Verify votes: blocker / issue / suggestion | Critic |
-|------|---------------|-------------------------------------------|--------|
-| `full` | all 5 | 3 / 1 / 0 | yes |
-| `light` | spec-conformance + bugs | 1 / 1 / 0 | no |
+| Tier | Review lenses | Verify votes: blocker / issue | Critic |
+|------|---------------|------------------------------|--------|
+| `full` | all 5 | 3 / 1 | yes |
+| `light` | spec-conformance + bugs | 1 / 1 | no |
 | `skip` | — run `review-pr` instead — | | |
 
-Suggestions get zero votes on purpose: they are non-blocking, so a wrong one costs a moment of the author's attention rather than a wasted round trip. Verification budget goes to claims that can block a merge.
+**A review carries defects and nothing else.** There is no suggestions section, and non-blocking observations are not published — the workflow discards them before verification and returns no channel that could carry one to the author. "Non-blocking" never meant free: the author still pays a context switch to read it, judge it, and answer it, and the ones that turn out to be wrong cost the full round trip they were supposedly too cheap to matter. So the lens schema keeps a `suggestion` severity purely as a sink — it gives an agent somewhere to put an opinion other than `issue`, and everything in it is dropped unread and reported to you only as a count.
 
 Advisory findings also get zero votes, for the opposite reason. A pinned version either falls inside a published advisory's affected range or it does not — that is a registry fact, not a judgement call. Sending one to a refuter only invites an argument about whether the app's configuration makes it exploitable, which is the wrong question: the remedy is the same patch bump either way, and the same claim can be refuted on one run and confirmed on the next. Any finding carrying an `advisory` identifier skips verification and is reported as a version fact.
 
@@ -137,9 +137,8 @@ Pass these as real JSON values, never a JSON-encoded string.
 | `confirmed` | Findings that survived verification, plus advisory findings, which skip it. These become Issues. Advisory entries have `votes: 0` and an `advisory` id. |
 | `rejected` | Refuted findings, with the refutation reason. **Never shown to the author** — report to the user only. |
 | `dropped` | Material findings the per-lens cap left unverified. Not publishable as-is. |
-| `suggestions` | Non-blocking findings, passed through unverified by design. |
-| `gaps` | Critic's coverage gaps (`full` tier only). |
-| `stats` | `{ tier, verifyAgent, lenses, confirmed, refuted, unverified, advisories }` |
+| `gaps` | Critic's coverage gaps (`full` tier only). For your eyes: they describe what this review did not look at, which is not a defect the author can act on. |
+| `stats` | `{ tier, verifyAgent, lenses, confirmed, refuted, unverified, discarded, advisories }` — `discarded` counts non-defect findings dropped before verification. |
 
 ### Cost
 
@@ -161,10 +160,11 @@ Agent count scales with findings, not diff size. A PR yielding 2 blockers and 5 
    | field | goes to |
    |-------|---------|
    | `confirmed` | **Issues.** The only findings stated as defects. State an entry with an `advisory` id as a version fact — package, pinned version, severity, affected range, first patched version — and say plainly if it is not exploitable in this codebase. Do not drop it on that basis. |
-   | `suggestions` | **Suggestions**, as-is. Unverified by design, so never phrase one as a defect. |
-   | `gaps` | **Suggestions**, phrased as coverage this review did not reach. |
-   | `dropped` | **Nowhere in the review.** Report to the user only (step 3). |
-   | `rejected` | **Nowhere in the review.** Report to the user only (step 3). |
+   | `gaps` | **Nowhere in the review.** Report to the user only (step 4). |
+   | `dropped` | **Nowhere in the review.** Report to the user only (step 4). |
+   | `rejected` | **Nowhere in the review.** Report to the user only (step 4). |
+
+   Three of the five fields never reach the author. That is the design: everything in the review body survived adversarial verification, so there is no section where an unverified claim could sit. If you find yourself wanting to append a note that is not a confirmed defect — a coverage gap, a refuted-but-interesting claim, a stylistic preference — it goes to the user in step 4 or nowhere.
 
    - Every finding follows `review-pr`'s **Writing Findings** — consequence first, anchored to code, a checkable `Done when:`, a `Provenance:` hash, and no prescribed edit. The schema's `doneWhen` / `provenance` fields map directly onto that format.
    - Verdict: `REQUEST_CHANGES` if any confirmed blocker survived, else `COMMENT` if any confirmed issue, else `APPROVE`. `dropped` findings never affect the verdict — an unverified claim is not evidence.
@@ -176,7 +176,7 @@ Agent count scales with findings, not diff size. A PR yielding 2 blockers and 5 
      - Bad: "reportRoute accepts Object.prototype members as tiers — `parts[0] in RETENTION_TIERS` matches `toString`/`constructor`/`__proto__`."
      - Good: "**Retention tier validation bug (high)** — a few JavaScript built-in names (`toString`, `constructor`) accidentally pass as valid tiers, and a report published under one is stored with no expiration — it quietly never gets deleted."
      - Test: if the claim sentence names a function or operator before it names the consequence, rewrite it.
-   - **Give every finding a priority — `(high)`, `(medium)`, or `(low)` after its bolded label.** Priority is real-world consequence: data exposure or loss above crashes, crashes above debt, debt above polish. You assign it during assembly, since only you see all lenses. It is independent of the issue/suggestion split — that split encodes verification confidence, not importance, and a high-priority suggestion routinely outranks a low-priority issue. Sort each section most-severe-first.
+   - **Give every finding a priority — `(high)`, `(medium)`, or `(low)` after its bolded label.** Priority is real-world consequence: data exposure or loss above crashes, crashes above debt, debt above polish. You assign it during assembly, since only you see all lenses. It is independent of the blocker/issue split — that split decides the verdict, priority tells the author what to fix first. Sort most-severe-first.
    - **Never paste `evidence` into the review.** That field is the agent's justification *to you*, and you already accepted it by confirming the finding. The author needs the anchor and at most one short quote of the offending code — not the reasoning chain, not the spec excerpt, not the git archaeology.
    - **Budget roughly 60 words per finding and 400 for the whole body.** Over budget means you are re-arguing a verdict you have already reached. Cut the argument, keep the instruction.
    - **No preamble, no restatement of the PR.** At most one sentence on what is already right. The author knows what they built.
@@ -184,7 +184,7 @@ Agent count scales with findings, not diff size. A PR yielding 2 blockers and 5 
 
 4. **Preview the review for the user.** Output the full review as plain markdown text in the conversation. Do not skip this. Do not substitute a tool-call preview.
 
-   Then, in **no more than four lines** outside the review body, report counts only: tier and why, `verify-agent`, `stats.refuted`, `stats.advisories`, any duplicate collapse from step 2, and `stats.unverified`. One exception to the line budget — if `stats.unverified` is non-zero, list those findings explicitly and say plainly that the review is not exhaustive; raising `MAX_VERIFY_PER_LENS` or re-running that lens is the fix.
+   Then, in **no more than four lines** outside the review body, report counts only: tier and why, `verify-agent`, `stats.refuted`, `stats.discarded`, `stats.advisories`, any duplicate collapse from step 2, `stats.unverified`, and the critic's `gaps` if any. One exception to the line budget — if `stats.unverified` is non-zero, list those findings explicitly and say plainly that the review is not exhaustive; raising `MAX_VERIFY_PER_LENS` or re-running that lens is the fix.
 
 5. **Post only after explicit approval.** Do not call any GitHub write tool before the user approves this specific review. A prior approval, a plan that mentioned posting, or this skill's own existence does not count.
 

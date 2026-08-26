@@ -1,6 +1,6 @@
 export const meta = {
   name: 'review-pr-workflow',
-  description: 'Fan out PR review lenses, adversarially verify each material claim, then critique for gaps',
+  description: 'Fan out PR review lenses, adversarially verify every claim that can reach the author, then critique for gaps',
   phases: [
     { title: 'Review', detail: 'one agent per review lens' },
     { title: 'Verify', detail: 'refute each material finding' },
@@ -46,8 +46,10 @@ const {
 // agent count; the selection is deterministic so resumes hit cache.
 const MAX_VERIFY_PER_LENS = 4
 
-// Only these severities are worth an agent. Suggestions are non-blocking and pass
-// through unverified, clearly labelled as such.
+// Only these severities reach the author, and only after verification. "suggestion"
+// is a discard bucket, not an output channel: it exists so a lens holding a
+// non-defect observation has somewhere to put it other than `issue`. Nothing
+// labelled suggestion is returned, rendered, or posted — see the split stage below.
 const MATERIAL = ['blocker', 'issue']
 const SEVERITY_RANK = { blocker: 0, issue: 1, suggestion: 2 }
 
@@ -76,6 +78,12 @@ ${lintOutput || '(clean)'}
 The PR branch is already checked out. You are READ-ONLY: do not checkout, commit,
 stash, start a dev server, or modify any file.
 Read the diff with: git diff ${baseRef}...HEAD
+
+Report defects only: something that is wrong, missing, or unsafe, with a
+consequence you can name. Polish, preference, refactors, and "this would read
+better as" are not findings. Give those severity "suggestion" and they are
+discarded unread. Do not label one "issue" to get it seen — an unverified opinion
+landing on the author is the specific failure this review exists to prevent.
 
 For every finding, run git blame on the offending line and report the short hash
 of the commit that introduced it as "provenance". If that commit is not in
@@ -128,10 +136,12 @@ but still report it.`,
   },
   {
     key: 'clarity',
-    prompt: `Find code that will be expensive to maintain: misleading names,
-duplicated logic that should be shared, functions doing several unrelated things,
-and missing tests for behavior this PR introduces. Be selective — raise only what
-you would genuinely block or comment on, never nitpicks.`,
+    prompt: `Find maintenance defects this PR introduces: behavior added with no
+test covering it, logic duplicated such that one copy will silently diverge from
+the other, and names or types that state something the code does not do. Every
+finding needs a consequence you can name — what breaks, for whom, when. A cleaner
+structure you would prefer is not a consequence. Returning zero findings is the
+normal outcome for this lens.`,
   },
 ]
 
@@ -155,7 +165,7 @@ const FINDINGS_SCHEMA = {
         properties: {
           file: { type: 'string' },
           line: { type: 'number' },
-          severity: { type: 'string', enum: ['blocker', 'issue', 'suggestion'] },
+          severity: { type: 'string', enum: ['blocker', 'issue', 'suggestion'], description: 'blocker and issue are defects and are the only severities that reach anyone. "suggestion" is a discard bucket for non-defect observations — it is dropped unread, so use it freely rather than inflating an opinion to "issue".' },
           claim: { type: 'string', description: 'One sentence: what is wrong.' },
           evidence: { type: 'string', description: 'The specific code that makes this true.' },
           doneWhen: { type: 'string', description: 'Observable acceptance criteria the author can check without the reviewer. Constraints, not edits.' },
@@ -308,11 +318,17 @@ const reviewed = await pipeline(
     schema: FINDINGS_SCHEMA,
   }),
 
-  // Split material findings from suggestions, then cap. Whatever the cap drops is
+  // Discard non-defects, split the rest, then cap. Whatever the cap drops is
   // carried forward, not discarded — a silent truncation reads as "nothing found".
   (result, lens) => {
     const found = (result && result.findings) || []
-    const suggestions = found.filter(f => !MATERIAL.includes(f.severity))
+
+    // The discard bucket. Counted so the user can see what the lenses wanted to
+    // say, then dropped: it reaches neither the assembler nor the author. An
+    // unverified non-blocking note still costs the author a context switch to
+    // read, judge and answer, and the wrong ones cost the round trip they were
+    // supposed to be too cheap to matter.
+    const discarded = found.filter(f => !MATERIAL.includes(f.severity))
 
     // Advisory findings are registry facts, not judgement calls: a pinned version
     // either falls in a published affected range or it does not. Sending them to a
@@ -334,11 +350,14 @@ const reviewed = await pipeline(
     if (advisories.length) {
       log(`lens ${lens.key}: ${advisories.length} advisory finding(s) reported as version facts, not sent to verification`)
     }
+    if (discarded.length) {
+      log(`lens ${lens.key}: ${discarded.length} non-defect finding(s) discarded — not verified, not reported`)
+    }
 
-    return { lens: lens.key, toVerify, dropped, suggestions, advisories }
+    return { lens: lens.key, toVerify, dropped, discarded: discarded.length, advisories }
   },
 
-  async ({ lens, toVerify, dropped, suggestions, advisories }) => {
+  async ({ lens, toVerify, dropped, discarded, advisories }) => {
     const judged = (await parallel(toVerify.map(f => () => judge(f, lens)))).filter(Boolean)
     return {
       judged: judged.concat(advisories.map(f => ({
@@ -349,7 +368,7 @@ const reviewed = await pipeline(
         why: `advisory ${f.advisory} — reported as a version fact; exploitability deliberately not verified`,
       }))),
       dropped: dropped.map(f => ({ ...f, lens })),
-      suggestions: suggestions.map(f => ({ ...f, lens })),
+      discarded,
     }
   },
 )
@@ -359,11 +378,11 @@ const judged = lensResults.flatMap(r => r.judged)
 const confirmed = judged.filter(f => f.survived)
 const rejected = judged.filter(f => !f.survived)
 const dropped = lensResults.flatMap(r => r.dropped)
-const suggestions = lensResults.flatMap(r => r.suggestions)
+const discarded = lensResults.reduce((n, r) => n + (r.discarded || 0), 0)
 
 const advisories = confirmed.filter(isAdvisory)
 
-log(`${confirmed.length} confirmed (${advisories.length} advisory fact${advisories.length === 1 ? '' : 's'}), ${rejected.length} refuted and dropped, ${dropped.length} unverified past the cap, ${suggestions.length} suggestions`)
+log(`${confirmed.length} confirmed (${advisories.length} advisory fact${advisories.length === 1 ? '' : 's'}), ${rejected.length} refuted and dropped, ${dropped.length} unverified past the cap, ${discarded} non-defect discarded`)
 
 // ---------------------------------------------------------------------------
 // Phase 3: what did the review miss? Verification only ever removes findings.
@@ -392,7 +411,6 @@ return {
   confirmed,
   rejected: rejected.map(f => ({ file: f.file, line: f.line, claim: f.claim, why: f.why })),
   dropped,
-  suggestions,
   gaps: (gaps && gaps.gaps) || [],
   stats: {
     tier,
@@ -401,6 +419,7 @@ return {
     confirmed: confirmed.length,
     refuted: rejected.length,
     unverified: dropped.length,
+    discarded,
     advisories: advisories.length,
   },
 }

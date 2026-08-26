@@ -109,6 +109,7 @@ For every finding:
 4. **`Provenance:` is the commit that introduced the offending line.** From `git blame`, short hash. If it predates the PR's merge-base, write `pre-existing (hash)` — still a finding if the PR touches or depends on it, and the author should know which. For a spec or doc claim, the commit that wrote the sentence. Never omitted: a finding whose provenance cannot be determined is incomplete and does not post.
 5. **Do not prescribe the edit.** No `Change:` line, no code blocks, no config snippets. A reviewer's untested patch is the most expensive thing a review can contain: the author applies it verbatim, it breaks something, and the next round is spent on the reviewer's mistake. If a specific mechanism is genuinely required, state it as a constraint inside `Done when:`. Literal code or config appears in a review only if the reviewer executed it, and then it is labelled as tested.
 6. **Say it once, briefly.** The reasoning that convinced you belongs in your head. If a finding runs longer than a short bullet you are re-litigating a verdict you have already reached.
+7. **If it is not a defect, it does not go in the review.** There is no suggestions section — no "consider…", no optional improvements, no preferences. "Non-blocking" is not free: the author still pays a context switch to read it, decide whether you meant it, and answer it, and the ones that are wrong cost the entire round trip they were supposedly too cheap to matter. A review that mixes defects with taste teaches the author to skim, and what gets skimmed is the blocker. If something non-defect genuinely matters to you, say it in the PR conversation as yourself — keep it out of the review.
 
 When re-reviewing a revision, check it against each `Done when:` of the prior review and name the unmet items explicitly — "the chainId check was removed; done-when required it to stay" converges in one round; "this does not address the review" does not.
 
@@ -130,9 +131,6 @@ When re-reviewing a revision, check it against each `Done when:` of the prior re
   - Done when: [observable acceptance criteria]
   - Provenance: [abc1234]
 
-## Suggestions
-- [Optional improvements that aren't blocking]
-
 ## Verdict
 [APPROVE | REQUEST_CHANGES | COMMENT]
 
@@ -148,7 +146,7 @@ This review was conducted using the [review-pr skill](https://github.com/yearn/w
 - Always run project lint settings before manual review
 - Evaluate new dependencies against npm-policy before approving
 - Reference specific lines when commenting
-- Write change requests per "Writing Actionable Change Requests" — anchored, constraint-adjacent, with checkable retentions, and short
-- Be constructive - suggest fixes, not just problems
+- Write findings per "Writing Findings" — anchored, constraint-adjacent, with checkable retentions, and short
+- Report defects only; a review with nothing to report is an approval, not an invitation to fill space
 - Verify PR description matches actual changes
 - Check that implementation satisfies the linked issue requirements

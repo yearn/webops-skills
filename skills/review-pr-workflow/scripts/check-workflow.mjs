@@ -16,7 +16,9 @@ const mkFinding = (lens, i, severity) => ({
   claim: `${lens} claim ${i}`, evidence: 'ev', doneWhen: 'dw', provenance: 'abc1234',
 })
 
-// Enough material findings on `bugs` to trip MAX_VERIFY_PER_LENS.
+// Enough material findings on `bugs` to trip MAX_VERIFY_PER_LENS. The two
+// `suggestion` entries must be discarded outright — the workflow returns no
+// channel that could carry them to the author.
 const FAKE = {
   spec: [mkFinding('spec', 1, 'blocker'), mkFinding('spec', 2, 'suggestion')],
   bugs: [
@@ -93,9 +95,11 @@ check('cap leaves 1 of bugs\' 5 material findings unverified',
   full.dropped.filter(d => d.lens === 'bugs').length === 1,
   JSON.stringify(full.dropped.map(d => d.file)))
 check('capped findings are returned, not discarded', full.dropped.length === 1)
-check('suggestions bypass verification',
-  full.suggestions.length === 2 && !labels.some(l => l?.includes('spec2') || l?.includes('bugs6')),
-  JSON.stringify(full.suggestions.map(s => s.file)))
+check('non-defect findings are discarded — never verified, never returned',
+  full.stats.discarded === 2 &&
+  !('suggestions' in full) &&
+  !labels.some(l => l?.includes('spec2') || l?.includes('bugs6')),
+  JSON.stringify({ discarded: full.stats.discarded, returned: Object.keys(full) }))
 check('blockers get a 3-vote panel',
   full.confirmed.filter(f => f.severity === 'blocker').every(f => f.votes === 3),
   JSON.stringify(full.confirmed.map(f => [f.file, f.votes])))
@@ -112,6 +116,9 @@ check('advisory finding is confirmed without a verifier',
   !labels.some(l => l?.includes('deps1')),
   JSON.stringify(labels.filter(l => l?.includes('deps'))))
 check('critic runs at full tier', full.gaps.length === 1)
+check('nothing unverified is returned as publishable',
+  full.confirmed.every(f => f.votes > 0 || f.advisory),
+  JSON.stringify(full.confirmed.map(f => [f.file, f.votes, f.advisory])))
 check('stats match payload',
   full.stats.confirmed === full.confirmed.length &&
   full.stats.unverified === full.dropped.length &&
