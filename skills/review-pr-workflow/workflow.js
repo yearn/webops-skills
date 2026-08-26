@@ -258,8 +258,9 @@ those are not the claim. If the version fact holds but the surrounding wording i
 wrong, set refuted=false and put the accurate version fact in "correction":
 package, pinned version, severity, affected range, first patched version.
 
-Default to refuted=true when you cannot confirm the range from a published source.
-An unchecked advisory claim must not reach the PR author.`
+Look it up with \`gh api /advisories/${f.advisory}\` (GHSA ids) or
+\`npm audit --json\` in the repo. Default to refuted=true when you cannot confirm the
+range from one of those. An unchecked advisory claim must not reach the PR author.`
 }
 
 // codex writes its final message to a file rather than stdout, so nothing has to

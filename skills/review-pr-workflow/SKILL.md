@@ -137,7 +137,7 @@ Pass these as real JSON values, never a JSON-encoded string.
 | `confirmed` | Findings that survived verification. These become Issues, and they are the only thing that becomes anything. Every entry has `votes >= 1`, advisories included — an advisory's single vote is a registry check, not a refutation attempt. |
 | `rejected` | Refuted findings, with the refutation reason. **Never shown to the author** — report to the user only. |
 | `dropped` | Material findings the per-lens cap left unverified. Not publishable as-is. |
-| `gaps` | Critic's coverage gaps (`full` tier only). Not published and not reported: they describe what this review did not look at, which is neither a defect the author can act on nor a count the user asked for. Read them yourself to decide whether to re-run a lens. |
+| `gaps` | Critic's coverage gaps (`full` tier only). Never in the review; listed to the user in step 4 so they can decide whether to re-run a lens. |
 | `stats` | `{ tier, verifyAgent, lenses, confirmed, refuted, unverified, discarded, advisories }` — `discarded` counts non-defect findings dropped before verification. |
 
 ### Cost
@@ -160,7 +160,7 @@ Agent count scales with findings, not diff size. A PR yielding 2 blockers and 5 
    | field | goes to |
    |-------|---------|
    | `confirmed` | **Issues.** The only findings stated as defects. State an entry with an `advisory` id as a version fact — package, pinned version, severity, affected range, first patched version — and say plainly if it is not exploitable in this codebase. Do not drop it on that basis. |
-   | `gaps` | **Nowhere.** Not the review, not the step-4 summary. Yours to read. |
+   | `gaps` | **Nowhere in the review.** Listed to the user in step 4. |
    | `dropped` | **Nowhere in the review.** Report to the user only (step 4). |
    | `rejected` | **Nowhere in the review.** Report to the user only (step 4). |
 
@@ -184,7 +184,7 @@ Agent count scales with findings, not diff size. A PR yielding 2 blockers and 5 
 
 4. **Preview the review for the user.** Output the full review as plain markdown text in the conversation. Do not skip this. Do not substitute a tool-call preview.
 
-   Then, in **no more than four lines** outside the review body, report counts only: tier and why, `verify-agent`, `stats.refuted`, `stats.discarded`, `stats.advisories`, any duplicate collapse from step 2, and `stats.unverified`. Counts, not contents — do not summarise a refuted claim, and do not surface the critic's `gaps` here or anywhere else the user reads the result. One exception to the line budget — if `stats.unverified` is non-zero, list those findings explicitly and say plainly that the review is not exhaustive; raising `MAX_VERIFY_PER_LENS` or re-running that lens is the fix.
+   Then, in **no more than four lines** outside the review body, report counts only: tier and why, `verify-agent`, `stats.refuted`, `stats.discarded`, `stats.advisories`, any duplicate collapse from step 2, and `stats.unverified`. Counts, not contents — do not summarise a refuted claim. Two exceptions to the line budget — if `gaps` is non-empty, list each gap in one line so the user can decide whether to re-run a lens; and if `stats.unverified` is non-zero, list those findings explicitly and say plainly that the review is not exhaustive; raising `MAX_VERIFY_PER_LENS` or re-running that lens is the fix.
 
 5. **Post only after explicit approval.** Do not call any GitHub write tool before the user approves this specific review. A prior approval, a plan that mentioned posting, or this skill's own existence does not count.
 
