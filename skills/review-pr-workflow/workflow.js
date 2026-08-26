@@ -76,6 +76,14 @@ ${lintOutput || '(clean)'}
 The PR branch is already checked out. You are READ-ONLY: do not checkout, commit,
 stash, start a dev server, or modify any file.
 Read the diff with: git diff ${baseRef}...HEAD
+
+For every finding, run git blame on the offending line and report the short hash
+of the commit that introduced it as "provenance". If that commit is not in
+git log ${baseRef}..HEAD, the line predates this PR: write
+"pre-existing <hash>" and only keep the finding if the PR touches or depends on
+that line. A finding without a provenance hash is incomplete — do not return it.
+State "doneWhen" as an observable end state the author can check alone. Do not
+prescribe the edit: no code, no config, no "replace X with Y".
 `
 
 // ---------------------------------------------------------------------------
@@ -143,16 +151,15 @@ const FINDINGS_SCHEMA = {
       type: 'array',
       items: {
         type: 'object',
-        required: ['file', 'line', 'severity', 'claim', 'evidence', 'change'],
+        required: ['file', 'line', 'severity', 'claim', 'evidence', 'doneWhen', 'provenance'],
         properties: {
           file: { type: 'string' },
           line: { type: 'number' },
           severity: { type: 'string', enum: ['blocker', 'issue', 'suggestion'] },
           claim: { type: 'string', description: 'One sentence: what is wrong.' },
           evidence: { type: 'string', description: 'The specific code that makes this true.' },
-          change: { type: 'string', description: 'The precise edit requested.' },
-          keep: { type: 'string', description: 'What must NOT change, as a checkable assertion. Empty if nothing applies.' },
-          doneWhen: { type: 'string', description: 'Observable acceptance criteria.' },
+          doneWhen: { type: 'string', description: 'Observable acceptance criteria the author can check without the reviewer. Constraints, not edits.' },
+          provenance: { type: 'string', description: 'Short hash of the commit that introduced the offending line (git blame), or "pre-existing <hash>" when it predates the PR merge-base.' },
           advisory: { type: 'string', description: 'Published advisory identifier (GHSA/CVE) when this finding is a pinned version inside an advisory\'s affected range. Empty otherwise.' },
         },
       },
@@ -198,12 +205,14 @@ A PR reviewer made this claim. Your job is to REFUTE it.
   Severity: ${f.severity}
   Claim: ${f.claim}
   Stated evidence: ${f.evidence}
-  Requested change: ${f.change}
+  Done when: ${f.doneWhen}
+  Provenance: ${f.provenance}
 
 Read the actual code at that location and decide. Refute it if: the code does not
 say what the claim says, the problem is pre-existing and not introduced by this PR,
-the "bug" is unreachable in practice, a guard elsewhere already handles it, or the
-evidence does not actually support the claim.
+the "bug" is unreachable in practice, a guard elsewhere already handles it, the
+evidence does not actually support the claim, or git blame on that line does not
+match the stated provenance.
 
 Default to refuted=true when uncertain. A false finding posted to a colleague's PR
 costs more than a missed one. If the claim is directionally right but inaccurately
@@ -277,7 +286,7 @@ async function judge(f, lens) {
     survived,
     votes: votes.length,
     why: votes.map(v => v.reason).join(' | '),
-    // A correction rewrites the claim; evidence and change may still need a light
+    // A correction rewrites the claim; evidence and doneWhen may still need a light
     // edit when rendering, so the original claim is kept for comparison.
     originalClaim: survived && correction ? f.claim : undefined,
     claim: survived && correction ? correction : f.claim,

@@ -97,20 +97,20 @@ Use Playwright or browser automation tooling to visually and functionally verify
 - Delete all screenshots after the review is complete (step 11 in workflow)
 - Never commit screenshot files to the repository
 
-## Writing Actionable Change Requests
+## Writing Findings
 
-The PR author is accountable for meeting every requirement in a review. Even so, write each change request so the cheapest misreading of it is impossible — a review that leads with "remove X" and buries its constraints under the rationale invites a wholesale action that deletes things the review required to keep.
+A finding is a defect and a checkable end state. It is not a patch. The author owns the fix; the reviewer owns saying what is wrong, what "fixed" looks like, and where the defect came from.
 
-For every requested change:
+For every finding:
 
-1. **Anchor to code, not policy.** Check the actual code structure before writing the instruction. If the behavior to remove is one predicate inside a function that also does required things, say so: "In `selectValidOutputs`, remove only the requested-address check; the chainId, label, and cap checks stay."
-2. **Name the naive action when it's wrong.** If the request sits next to an easy wholesale action (revert a commit, delete a function, regenerate a file), state explicitly whether that action satisfies the review: "This is not a plain revert of #435 — a revert deletes protections this review requires."
-3. **State retentions as checkable assertions.** "Retain the output caps" is a property; "the existing chain/label/cap tests must still pass" is verifiable. Name tests or observable behavior that must remain green. If a behavior to retain has no test, request one.
-4. **Keep constraints next to the imperative.** Put "keep/don't touch" clauses in the same bullet as the "remove/change" instruction, never paragraphs later under supporting rationale.
-5. **Describe the end state.** When a change is surgical rather than wholesale, sketch the code after the change: which functions exist, which checks remain, what the resulting contract is.
-6. **Say it once, briefly.** A change request is an instruction, not an argument. The reasoning that convinced you the finding is real belongs in your head; the author needs the anchor, the change, the retentions, and the done-when. If a finding runs longer than a short bullet, you are re-litigating a verdict you have already reached — and length is not free, because the reviews that get partly implemented are the ones the author skimmed.
+1. **State the consequence first.** A short bolded label naming the problem class, a priority, then one sentence on what goes wrong and why anyone should care, in ordinary words. Mechanism details (operator names, internal identifiers) come after the consequence or not at all.
+2. **Anchor to code.** File and line, verified against the actual code structure, not inferred from the diff.
+3. **`Done when:` is the acceptance bar.** One line, observable, checkable by the author without the reviewer. Where a wholesale action (revert, delete, regenerate) would satisfy the letter but not the intent, say so here: "done when the requested-address check is gone and the chainId, label, and cap checks still pass."
+4. **`Provenance:` is the commit that introduced the offending line.** From `git blame`, short hash. If it predates the PR's merge-base, write `pre-existing (hash)` — still a finding if the PR touches or depends on it, and the author should know which. For a spec or doc claim, the commit that wrote the sentence. Never omitted: a finding whose provenance cannot be determined is incomplete and does not post.
+5. **Do not prescribe the edit.** No `Change:` line, no code blocks, no config snippets. A reviewer's untested patch is the most expensive thing a review can contain: the author applies it verbatim, it breaks something, and the next round is spent on the reviewer's mistake. If a specific mechanism is genuinely required, state it as a constraint inside `Done when:`. Literal code or config appears in a review only if the reviewer executed it, and then it is labelled as tested.
+6. **Say it once, briefly.** The reasoning that convinced you belongs in your head. If a finding runs longer than a short bullet you are re-litigating a verdict you have already reached.
 
-When re-reviewing a revision, check it against each item of the prior review and name the unmet items explicitly — "chain/label/cap validation was removed; the review asked to retain it" converges in one round; "this does not address the review" does not.
+When re-reviewing a revision, check it against each `Done when:` of the prior review and name the unmet items explicitly — "the chainId check was removed; done-when required it to stay" converges in one round; "this does not address the review" does not.
 
 ## Review Format
 
@@ -123,11 +123,12 @@ When re-reviewing a revision, check it against each item of the prior review and
 - **package-name**: [APPROVED/REJECTED] - [brief reason]
 
 ## Issues
-- [ ] **file.tsx:42** - [Description of issue]
-  - Change: [the specific edit, anchored to functions/lines]
-  - Keep: [what must not change, stated as testable assertions — omit if nothing applies]
+- [ ] **file.tsx:42** - **Short label (high|medium|low)** — [what goes wrong and why it matters]
   - Done when: [observable acceptance criteria]
-- [ ] **file.tsx:87** - [Description of issue]
+  - Provenance: [abc1234 | pre-existing (abc1234)]
+- [ ] **file.tsx:87** - **Short label (medium)** — [what goes wrong and why it matters]
+  - Done when: [observable acceptance criteria]
+  - Provenance: [abc1234]
 
 ## Suggestions
 - [Optional improvements that aren't blocking]

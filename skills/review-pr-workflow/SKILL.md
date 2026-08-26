@@ -13,7 +13,7 @@ For an ordinary single-pass review, use `review-pr` instead. This skill costs ma
 
 ## Scope
 
-Same scope as `review-pr`: **web/frontend projects** (React, TypeScript, Next.js). This skill inherits `review-pr`'s review format, its rules for writing actionable change requests, and its approval gate — it changes only *how the findings are produced*, not what a review looks like or who gets to post it.
+Same scope as `review-pr`: **web/frontend projects** (React, TypeScript, Next.js). This skill inherits `review-pr`'s review format, its rules for writing findings, and its approval gate — it changes only *how the findings are produced*, not what a review looks like or who gets to post it.
 
 ## Arguments
 
@@ -154,7 +154,7 @@ Agent count scales with findings, not diff size. A PR yielding 2 blockers and 5 
    - Save screenshots to `/tmp/pr-review-{pr-number}/`, never inside the repo.
    - Skip entirely when the PR touches no UI.
 
-2. **Merge duplicate findings first.** The lenses overlap on purpose, so one defect routinely arrives two to four times in different words. That is a confidence signal, not four defects. Collapse `confirmed` entries naming the same defect at the same anchor into one, keeping the highest severity, the clearest `change`, and the strictest `doneWhen`. Report the collapse in step 4, never in the review body — vote counts are your evidence, not the author's.
+2. **Merge duplicate findings first.** The lenses overlap on purpose, so one defect routinely arrives two to four times in different words. That is a confidence signal, not four defects. Collapse `confirmed` entries naming the same defect at the same anchor into one, keeping the highest severity, the strictest `doneWhen`, and the `provenance` (they must agree; if they do not, one of the findings is wrong — verify before merging). Report the collapse in step 4, never in the review body — vote counts are your evidence, not the author's.
 
 3. **Assemble the review** using `review-pr`'s Review Format. Each return field has exactly one destination — do not mix them:
 
@@ -166,13 +166,13 @@ Agent count scales with findings, not diff size. A PR yielding 2 blockers and 5 
    | `dropped` | **Nowhere in the review.** Report to the user only (step 3). |
    | `rejected` | **Nowhere in the review.** Report to the user only (step 3). |
 
-   - Every change request follows `review-pr`'s **Writing Actionable Change Requests** — anchored to code, constraints in the same bullet as the imperative, retentions stated as checkable assertions, end state described. The schema's `change` / `keep` / `doneWhen` fields map directly onto that format.
+   - Every finding follows `review-pr`'s **Writing Findings** — consequence first, anchored to code, a checkable `Done when:`, a `Provenance:` hash, and no prescribed edit. The schema's `doneWhen` / `provenance` fields map directly onto that format.
    - Verdict: `REQUEST_CHANGES` if any confirmed blocker survived, else `COMMENT` if any confirmed issue, else `APPROVE`. `dropped` findings never affect the verdict — an unverified claim is not evidence.
 
    **Length is a correctness property here, not a matter of taste.** A review the author skims is a review that gets partly implemented, and the blocker is what gets skipped. Hold to all of these:
 
-   - **One finding, one bullet.** Claim in a single sentence, then `Change:` / `Keep:` / `Done when:`, one line each. Drop `Keep:` when nothing genuinely needs protecting — an empty retention is noise.
-   - **Rewrite every claim in plain language — never render the agent's `claim` verbatim.** Agent claims are written mechanism-first to convince a verifier; the author needs consequence-first prose a human parses on the first read. Open each finding with a short bolded label naming the problem class ("Retention tier validation bug"), then one sentence saying what goes wrong and why anyone should care, in ordinary words. Mechanism details (operator names, prototype chains, internal identifiers) go in the `Change:` line or nowhere.
+   - **One finding, one bullet.** Claim in a single sentence, then `Done when:` and `Provenance:`, one line each. Never a `Change:` line, never a code or config block — see **Writing Findings** item 5.
+   - **Rewrite every claim in plain language — never render the agent's `claim` verbatim.** Agent claims are written mechanism-first to convince a verifier; the author needs consequence-first prose a human parses on the first read. Open each finding with a short bolded label naming the problem class ("Retention tier validation bug"), then one sentence saying what goes wrong and why anyone should care, in ordinary words. Mechanism details (operator names, prototype chains, internal identifiers) go after the consequence, inside `Done when:` as a constraint, or nowhere.
      - Bad: "reportRoute accepts Object.prototype members as tiers — `parts[0] in RETENTION_TIERS` matches `toString`/`constructor`/`__proto__`."
      - Good: "**Retention tier validation bug (high)** — a few JavaScript built-in names (`toString`, `constructor`) accidentally pass as valid tiers, and a report published under one is stored with no expiration — it quietly never gets deleted."
      - Test: if the claim sentence names a function or operator before it names the consequence, rewrite it.
