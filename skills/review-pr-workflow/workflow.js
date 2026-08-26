@@ -384,8 +384,13 @@ const reviewed = await pipeline(
 
     material.sort((a, b) => (SEVERITY_RANK[a.severity] ?? 9) - (SEVERITY_RANK[b.severity] ?? 9))
 
-    const toVerify = material.slice(0, MAX_VERIFY_PER_LENS)
-    const dropped = material.slice(MAX_VERIFY_PER_LENS)
+    // The cap exists to bound refuter panels. An advisory is one cheap registry
+    // check, and a lockfile bump routinely carries more than MAX_VERIFY_PER_LENS of
+    // them — every one is verified, none is ever dropped by the cap.
+    const advisories = material.filter(isAdvisory)
+    const judgeable = material.filter(f => !isAdvisory(f))
+    const toVerify = advisories.concat(judgeable.slice(0, MAX_VERIFY_PER_LENS))
+    const dropped = judgeable.slice(MAX_VERIFY_PER_LENS)
 
     if (dropped.length) {
       log(`lens ${lens.key}: ${material.length} material findings, verifying top ${toVerify.length} by severity — ${dropped.length} carried through unverified`)

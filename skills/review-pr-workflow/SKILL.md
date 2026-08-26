@@ -144,7 +144,7 @@ Pass these as real JSON values, never a JSON-encoded string.
 
 ### Cost
 
-Agent count scales with findings, not diff size. A PR yielding 2 blockers and 5 issues costs ~17 agents at `full` tier, ~7 at `light`. `MAX_VERIFY_PER_LENS` in `workflow.js` is the ceiling knob.
+Agent count scales with findings, not diff size. A PR yielding 2 blockers and 5 issues costs ~17 agents at `full` tier (advisories are exempt from the cap — every one gets its registry check), ~7 at `light`. `MAX_VERIFY_PER_LENS` in `workflow.js` is the ceiling knob.
 
 ---
 

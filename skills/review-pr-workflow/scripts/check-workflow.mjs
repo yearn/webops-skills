@@ -29,10 +29,12 @@ const FAKE = {
   security: [],
   // Advisory findings are verified like everything else — against the registry
   // rather than by a refuter, but they still spawn a verifier and can be refuted.
-  deps: [{ ...mkFinding('deps', 1, 'issue'), advisory: 'GHSA-xxxx-xxxx-xxxx' }],
+  // Six advisories on one lens — more than MAX_VERIFY_PER_LENS. None may be dropped.
+  deps: [1, 2, 3, 4, 5, 6].map(i => ({ ...mkFinding('deps', i, 'issue'), advisory: `GHSA-xxxx-xxxx-xxx${i}` })),
   clarity: [mkFinding('clarity', 1, 'issue')],
 }
 
+const isAdv = f => Boolean(f.advisory)
 let agentCalls = 0
 let labels = []
 
@@ -116,7 +118,10 @@ check('advisory finding is verified, not waved through',
   full.confirmed.some(f => f.file === 'src/deps1.ts' && f.votes === 1) &&
   labels.some(l => l === 'verify:src/deps1.ts:11'),
   JSON.stringify(labels.filter(l => l?.includes('deps'))))
-check('advisory is counted in stats', full.stats.advisories === 1)
+check('advisory is counted in stats', full.stats.advisories === 6)
+check('advisories are never dropped by the per-lens cap',
+  full.confirmed.filter(isAdv).length === 6 && !full.dropped.some(d => d.lens === 'deps'),
+  JSON.stringify(full.dropped.map(d => d.file)))
 check('critic runs at full tier', full.gaps.length === 1)
 // The contract the whole review rests on: every publishable finding carries at
 // least one verifier verdict. No severity, and no advisory id, is a way around it.
@@ -135,13 +140,13 @@ console.log(`\n[codex verifier] ${agentCalls} agents`)
 // verifier; everything else must still go through codex.
 check('codex mode: advisory verifies with claude, not codex',
   labels.some(l => l === 'verify:src/deps1.ts:11') &&
-  !labels.some(l => l?.startsWith('codex-verify:') && l.includes('deps1')),
+  !labels.some(l => l?.startsWith('codex-verify:') && l.includes('deps')),
   JSON.stringify(labels.filter(l => l?.includes('deps'))))
 check('codex mode: non-advisory findings still verify via codex',
   labels.some(l => l?.startsWith('codex-verify:')) &&
-  !labels.some(l => l?.startsWith('verify:') && !l.includes('deps1')),
+  !labels.some(l => l?.startsWith('verify:') && !l.includes('deps')),
   JSON.stringify(labels.filter(l => l?.includes('verify'))))
-check('codex mode: advisory is confirmed', codex.confirmed.some(f => f.file === 'src/deps1.ts' && f.votes === 1))
+check('codex mode: advisory is confirmed', codex.confirmed.filter(isAdv).every(f => f.votes === 1) && codex.confirmed.filter(isAdv).length === 6)
 
 const light = await run({ ...BASE, tier: 'light' })
 console.log(`\n[light tier] ${agentCalls} agents`)
