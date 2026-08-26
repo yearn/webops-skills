@@ -27,7 +27,8 @@ const FAKE = {
     mkFinding('bugs', 5, 'issue'), mkFinding('bugs', 6, 'suggestion'),
   ],
   security: [],
-  // Advisory findings must reach `confirmed` without a verifier being spawned.
+  // Advisory findings are verified like everything else — against the registry
+  // rather than by a refuter, but they still spawn a verifier and can be refuted.
   deps: [{ ...mkFinding('deps', 1, 'issue'), advisory: 'GHSA-xxxx-xxxx-xxxx' }],
   clarity: [mkFinding('clarity', 1, 'issue')],
 }
@@ -103,21 +104,24 @@ check('non-defect findings are discarded — never verified, never returned',
 check('blockers get a 3-vote panel',
   full.confirmed.filter(f => f.severity === 'blocker').every(f => f.votes === 3),
   JSON.stringify(full.confirmed.map(f => [f.file, f.votes])))
-check('issues get 1 vote (advisories excluded — they are never verified)',
-  full.confirmed.filter(f => f.severity === 'issue' && !f.advisory).every(f => f.votes === 1),
+check('issues get 1 vote, advisories included',
+  full.confirmed.filter(f => f.severity === 'issue').every(f => f.votes === 1),
   JSON.stringify(full.confirmed.map(f => [f.file, f.votes])))
 check('refuted finding is excluded from confirmed',
   !full.confirmed.some(f => f.file === 'src/bugs3.ts') &&
   full.rejected.some(f => f.file === 'src/bugs3.ts'))
 check('agent labels are unique', new Set(labels).size === labels.length,
   'duplicates: ' + labels.filter((l, i) => labels.indexOf(l) !== i).join(','))
-check('advisory finding is confirmed without a verifier',
-  full.confirmed.some(f => f.file === 'src/deps1.ts' && f.votes === 0) &&
-  !labels.some(l => l?.includes('deps1')),
+check('advisory finding is verified, not waved through',
+  full.confirmed.some(f => f.file === 'src/deps1.ts' && f.votes === 1) &&
+  labels.some(l => l === 'verify:src/deps1.ts:11'),
   JSON.stringify(labels.filter(l => l?.includes('deps'))))
+check('advisory is counted in stats', full.stats.advisories === 1)
 check('critic runs at full tier', full.gaps.length === 1)
+// The contract the whole review rests on: every publishable finding carries at
+// least one verifier verdict. No severity, and no advisory id, is a way around it.
 check('nothing unverified is returned as publishable',
-  full.confirmed.every(f => f.votes > 0 || f.advisory),
+  full.confirmed.length > 0 && full.confirmed.every(f => f.votes > 0),
   JSON.stringify(full.confirmed.map(f => [f.file, f.votes, f.advisory])))
 check('stats match payload',
   full.stats.confirmed === full.confirmed.length &&
@@ -132,12 +136,11 @@ check('light gives blockers 1 vote', light.confirmed.every(f => f.votes === 1),
   JSON.stringify(light.confirmed.map(f => [f.file, f.votes])))
 
 const none = await run({ ...BASE, tier: 'full' }, { refuteAll: true })
-check('\n[edge] all-refuted leaves only the advisory confirmed',
-  none.confirmed.length === 1 &&
-  none.confirmed[0].advisory === 'GHSA-xxxx-xxxx-xxxx' &&
-  none.rejected.length > 0,
+check('\n[edge] all-refuted leaves nothing confirmed — the advisory is refutable too',
+  none.confirmed.length === 0 &&
+  none.stats.advisories === 0 &&
+  none.rejected.some(f => f.file === 'src/deps1.ts'),
   JSON.stringify(none.confirmed.map(f => f.file)))
-check('[edge] advisory is counted in stats', none.stats.advisories === 1)
 
 let threw = null
 try { await run({ ...BASE, tier: 'skip' }) } catch (e) { threw = e.message }
