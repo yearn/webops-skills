@@ -13,7 +13,7 @@ const SRC = join(dirname(fileURLToPath(import.meta.url)), '..', 'workflow.js')
 
 const mkFinding = (lens, i, severity) => ({
   file: `src/${lens}${i}.ts`, line: 10 + i, severity,
-  claim: `${lens} claim ${i}`, evidence: 'ev', change: 'ch', keep: '', doneWhen: 'dw',
+  claim: `${lens} claim ${i}`, evidence: 'ev', doneWhen: 'dw', provenance: 'abc1234',
 })
 
 // Enough material findings on `bugs` to trip MAX_VERIFY_PER_LENS.
