@@ -23,8 +23,10 @@ Same scope as `review-pr`: **web/frontend projects** (React, TypeScript, Next.js
 
 | Arg | Default | Meaning |
 |-----|---------|---------|
-| `verify-agent` | `claude` | Which agent verifies findings in Phase 2. `claude` uses the session model. `codex` shells out to the `codex` CLI. |
-| `tier` | `auto` | How much horsepower to spend. `auto` detects from the diff (see Tier Detection). Anything else overrides detection. |
+| `verify-agent` | `claude` | Which agent verifies findings in Phase 2. `claude` uses the pinned review model. `codex` shells out to the `codex` CLI. |
+| `tier` | `auto` | How much horsepower to spend. `auto` detects from the diff (see Tier Detection). Anything else overrides detection — upgrades only. |
+
+Both map straight onto `phase0.mjs` flags: `--verify-agent=`, `--tier=`.
 
 Example: `/review-pr-workflow https://github.com/yearn/kong/pull/412 verify-agent=codex tier=full`
 
@@ -38,7 +40,9 @@ Advisory findings are the one exception: they are always verified by `claude`, w
 
 ## Requirements
 
-- GitHub tooling with read/write access to PRs and issues
+- `gh` CLI, authenticated, with read/write access to PRs and issues
+- Node (for `scripts/phase0.mjs`)
+- A clean working tree in a checkout of the PR's repo — Phase 0 checks out the PR head
 - Playwright or browser automation tooling for visual verification
 - `codex` CLI on PATH (only when `verify-agent=codex`)
 
@@ -46,48 +50,51 @@ Advisory findings are the one exception: they are always verified by `claude`, w
 
 ## Phase 0 — Main loop (before any subagent)
 
-Do all of this yourself. Subagents share one working directory; if they check out branches or start dev servers they race each other.
+**Run the script. Do not assemble any of this by hand.**
 
-1. **Fetch PR details** — description, metadata, changed files, diff, existing reviews.
-2. **Read the PR body for instructions** — author's review notes, linked issues (`Closes #123`, `Fixes #456`, URLs).
-3. **Fetch linked issues** — read each issue body for the original spec. The review is graded against this, not against the PR description.
-4. **Checkout the PR branch locally.** Do this once, here. Every workflow agent is read-only from this point.
-5. **Run project linters** — `bun run lint`, `npm run lint`, whatever the project defines. Capture the output; it goes into the workflow as context so five agents don't each re-run it.
-6. **Detect new dependencies** — if `package.json` changed, list newly added packages. These feed the dependency lens.
-7. **Detect the tier** (below) and **state it out loud with its reason** before spawning anything.
+```
+node <skill base directory>/scripts/phase0.mjs <pr-url-or-number> [--tier=full|light] [--verify-agent=claude|codex]
+```
+
+It prints one JSON object on stdout — that object is `args` for the workflow, verbatim, with no edits. Progress, the tier line and warnings go to stderr.
+
+Hand-assembling Phase 0 is what made the same PR url produce different reviews for different people. Every step below was a judgement call or a per-clone detail before it was a line of script:
+
+| step | what the script pins |
+|------|----------------------|
+| diff base | `gh pr view --json baseRefName`, fetched into `refs/remotes/origin/<base>` with an explicit refspec. `origin/HEAD` is never read — it is stale or wrong on somebody's clone. |
+| PR head | fetched from `refs/pull/<n>/head` and checked out by SHA, so a force-push mid-review is visible instead of silent. |
+| diff, diffstat, changed files | computed locally from `<base>...HEAD` — the same range the lens agents are told to read. |
+| linked issues | closing keywords and issue URLs parsed from the PR body, each fetched. Missing spec becomes a warning, not a silent grade against the PR description. |
+| new dependencies | base vs head `package.json` compared key by key, every workspace manifest, not eyeballed from the diff. |
+| lint | run once here so five agents don't each re-run it. |
+| tier | computed (below). |
+
+It refuses to run on a dirty tree, and it refuses to run when the working directory is a different repo than the PR. Both are errors to fix, not to work around — if it exits non-zero, fix the cause and re-run.
+
+Subagents share one working directory. Everything above happens here, once, and every workflow agent is read-only from this point.
+
+**Read the `warnings` array out loud before spawning anything.** A `codex` fallback and a missing issue spec both change what the review is worth, and both used to be invisible.
 
 ### Tier Detection
 
-Read `gh pr diff --name-only` and `--stat`. Two rules govern everything:
+The script decides. Two rules govern it:
 
-**Sensitivity can only upgrade. Size can only downgrade. Sensitivity wins.**
+**Sensitivity can only upgrade. Size can only downgrade. Sensitivity wins.** The failure that matters is under-reviewing a small dangerous diff, not overspending on a big boring one.
 
-The failure that matters is under-reviewing a small dangerous diff, not overspending on a big boring one.
+**Forces `full` — any single hit, regardless of diff size:** paths matching `auth`/`session`/`token`/`crypto`/`permission`/`role`/`acl`; an **added** dependency in any `package.json`; `.github/workflows/`, CI or build config; migrations or schema changes; added lines reading env vars; added lines carrying a hardcoded address, chain id, RPC url or endpoint.
 
-**Force `full` — any single hit, regardless of diff size:**
-- paths matching `auth`, `session`, `token`, `crypto`, `permission`, `role`, `acl`
-- `package.json` with an **added** dependency
-- `.github/workflows/`, CI config, build config
-- database migrations or schema changes
-- code that reads env vars, or config selecting a network / endpoint / contract address
-- signing scripts, chain config, hardcoded addresses
+**`light`** when no trigger fired and the diff spans ≤ 2 top-level source directories with ≤ 150 changed source lines (added + deleted), after excluding lockfiles, generated output, snapshots, fixtures and translations.
 
-**Downgrade to `light`** only when no sensitivity trigger fired **and both**:
-- the diff spans ≤ 2 top-level source directories
-- ≤ ~150 net source lines, **after excluding** lockfiles, generated files, snapshots, fixtures, translations
+**`skip`** — no source changes, docs-only, or a pure version bump with no added dependency. Review inline with plain `review-pr` instead; the workflow throws on `tier: "skip"`.
 
-**`skip` the workflow entirely** — review inline with plain `review-pr`:
-- docs- or comments-only
-- lockfile-only, or a pure version bump
-- generated-file-only
-- a clean revert of a single commit with no manual edits
+**Otherwise `full`.**
+
+**You may upgrade the tier. You may never downgrade it.** The detector reads paths and line counts, not semantics — it cannot see a logic change hiding inside what looks like a rename, so escalating past it is the whole point of a human-in-the-loop. Going the other way just reintroduces the judgement call the script exists to remove. To upgrade, re-run with `--tier=full`; the output records `detectedTier` alongside it, so the override is on the record.
+
+**Never change the tier silently.** Echo the script's `tierReason` before spawning, and if you upgraded, say what you saw that the detector could not.
 
 **Not criteria:** raw line count (a 2,000-line lockfile is nothing; a 40-line auth change is everything), and bot authorship (a Dependabot PR bumping a transitive dep is exactly when dependency policy matters most).
-
-**When signals conflict or a path is ambiguous, escalate.** This detector reads paths and line counts, not semantics — it cannot see a logic change hiding inside what looks like a rename.
-
-**Never downgrade silently.** Always print the tier and why:
-> `tier: light — 2 files, ~60 net lines, no sensitive paths. Override with tier=full.`
 
 ### Tier → workflow shape
 
@@ -118,7 +125,9 @@ The base directory is handed to you when the skill is invoked ("Base directory f
 
 ### args
 
-Pass these as real JSON values, never a JSON-encoded string.
+This is `phase0.mjs` stdout, passed through unchanged. Pass it as a real JSON value, never a JSON-encoded string. Do not hand-edit a field — if one is wrong, the script is wrong, and the next person gets the same wrong value only if you fix it there.
+
+The workflow ignores `detectedTier`, `tierReason` and `warnings`; they are for your step-4 report.
 
 | field | required | notes |
 |-------|----------|-------|
@@ -140,7 +149,7 @@ Pass these as real JSON values, never a JSON-encoded string.
 | `rejected` | Refuted findings, with the refutation reason. **Never shown to the author** — report to the user only. |
 | `dropped` | Material findings the per-lens cap left unverified. Not publishable as-is. |
 | `gaps` | Critic's coverage gaps (`full` tier only). Never in the review; listed to the user in step 4 so they can decide whether to re-run a lens. |
-| `stats` | `{ tier, verifyAgent, lenses, confirmed, refuted, unverified, discarded, advisories }` — `discarded` counts non-defect findings dropped before verification. |
+| `stats` | `{ tier, verifyAgent, reviewModel, lenses, confirmed, refuted, unverified, discarded, advisories }` — `discarded` counts non-defect findings dropped before verification. |
 
 ### Cost
 
@@ -186,11 +195,11 @@ Agent count scales with findings, not diff size. A PR yielding 2 blockers and 5 
 
 4. **Preview the review for the user.** Output the full review as plain markdown text in the conversation. Do not skip this. Do not substitute a tool-call preview.
 
-   Then, in **no more than four lines** outside the review body, report counts only: tier and why, `verify-agent`, `stats.refuted`, `stats.discarded`, `stats.advisories`, any duplicate collapse from step 2, and `stats.unverified`. Counts, not contents — do not summarise a refuted claim. Two exceptions to the line budget — if `gaps` is non-empty, list each gap in one line so the user can decide whether to re-run a lens; and if `stats.unverified` is non-zero, list those findings explicitly and say plainly that the review is not exhaustive; raising `MAX_VERIFY_PER_LENS` or re-running that lens is the fix.
+   Then, in **no more than four lines** outside the review body, report counts only: `tierReason` (and what you upgraded on, if you did), `stats.verifyAgent`, `stats.reviewModel`, `stats.refuted`, `stats.discarded`, `stats.advisories`, any duplicate collapse from step 2, and `stats.unverified`. Counts, not contents — do not summarise a refuted claim. Three exceptions to the line budget — if `gaps` is non-empty, list each gap in one line so the user can decide whether to re-run a lens; if `stats.unverified` is non-zero, list those findings explicitly and say plainly that the review is not exhaustive (raising `MAX_VERIFY_PER_LENS` or re-running that lens is the fix); and if Phase 0 returned `warnings`, list each one — a `codex` fallback or a missing issue spec changes what the review is worth.
 
 5. **Post only after explicit approval.** Do not call any GitHub write tool before the user approves this specific review. A prior approval, a plan that mentioned posting, or this skill's own existence does not count.
 
-6. **Cleanup** — delete every screenshot created during verification.
+6. **Cleanup** — delete every screenshot created during verification, and `git checkout -` to put the repo back on the branch it was on before Phase 0 detached it.
 
 ## User Confirmation
 
@@ -212,6 +221,17 @@ Reviewed with the [review-pr-workflow skill](https://github.com/yearn/webops/blo
 {N} review lenses, each finding independently verified by {verify-agent}. {M} candidate findings were refuted and dropped.
 ```
 
+## Reproducibility
+
+Two people running this on the same PR url should get the same review. What makes that hold:
+
+- **The diff is pinned, not inherited.** `phase0.mjs` resolves the base from the GitHub API and fetches it by explicit refspec, so nobody's `origin/HEAD` or week-old `origin/main` participates.
+- **The tier is computed, not judged.** Same paths and line counts in, same tier out. You may upgrade it; nothing may downgrade it.
+- **The lens and verifier models are pinned in `workflow.js`** (`REVIEW_MODEL` / `REVIEW_EFFORT`), not inherited from whoever's session is driving. An unpinned `agent()` takes the caller's model, so an Opus session and a Sonnet session used to produce different reviews from identical input — with nothing in the output saying so. `stats.reviewModel` now records it. Do not add an args override: that is the same fork wearing a different name.
+- **The verification cap breaks ties on file and line**, so which finding gets verified and which gets dropped no longer depends on the order a lens happened to emit them.
+
+What is still not pinned: sampling variance inside each agent, and the skill version itself — `export.sh` symlinks these files, so anyone who has not pulled `webops-skills` is running older logic. If two reviews disagree structurally, compare `git log -1` in this repo first.
+
 ## Notes
 
 - This skill is expensive. Prefer `review-pr` for routine PRs; the tier detector exists to keep you honest about that.
@@ -220,3 +240,4 @@ Reviewed with the [review-pr-workflow skill](https://github.com/yearn/webops/blo
 - Refuted findings are worth reporting to the user even though they never reach the author. A pattern in what gets refuted is a signal that a lens prompt needs tuning.
 - If `codex` is requested but missing, say so and fall back to `claude`. Never silently substitute a verifier.
 - Editing `workflow.js`: it is plain JS in an async context — no TypeScript, and `Date.now()` / `Math.random()` / `new Date()` throw, because they would break workflow resume. `scripts/check-workflow.mjs` exercises the control flow against stub agents; run it after any change.
+- `check-workflow.mjs` also guards the reproducibility properties: every agent carries an explicit model, the codex wrapper stays on the cheap tier, and the cap picks the same findings whatever order a lens emits them in.

@@ -37,15 +37,23 @@ const FAKE = {
 const isAdv = f => Boolean(f.advisory)
 let agentCalls = 0
 let labels = []
+let opts = []
 
-function makeEnv({ refuteAll = false } = {}) {
+function makeEnv({ refuteAll = false, reverse = false } = {}) {
   agentCalls = 0
   labels = []
+  opts = []
 
   async function agent(prompt, o = {}) {
     agentCalls++
     labels.push(o.label)
-    if (o.label?.startsWith('review:')) return { findings: FAKE[o.label.split(':')[1]] ?? [] }
+    opts.push(o)
+    if (o.label?.startsWith('review:')) {
+      const found = FAKE[o.label.split(':')[1]] ?? []
+      // Lens agents emit findings in whatever order they please. The cap must pick
+      // the same ones either way, so the reversed run has to agree with the forward one.
+      return { findings: reverse ? [...found].reverse() : found }
+    }
     if (o.label?.includes('verify:')) {
       const refuted = refuteAll || o.label.includes('bugs3')
       return { refuted, reason: refuted ? 'not real' : 'holds up', correction: 'none' }
@@ -132,6 +140,18 @@ check('stats match payload',
   full.stats.confirmed === full.confirmed.length &&
   full.stats.unverified === full.dropped.length &&
   full.stats.lenses.length === 5)
+// Unpinned, agent() inherits the caller's session model and the same PR reviewed
+// from two different sessions produces two different reviews.
+check('every agent carries an explicit model and effort',
+  opts.every(o => o.model && o.effort),
+  JSON.stringify(opts.filter(o => !o.model || !o.effort).map(o => o.label)))
+check('the review model is reported in stats', full.stats.reviewModel === 'opus', full.stats.reviewModel)
+
+const rev = await run({ ...BASE, tier: 'full' }, { reverse: true })
+const files = r => r.dropped.map(d => d.file).sort().join(',')
+check('cap selection does not depend on the order lenses emit findings',
+  files(full) === files(rev),
+  `${files(full)} vs ${files(rev)}`)
 
 const codex = await run({ ...BASE, tier: 'full', verifyAgent: 'codex' })
 console.log(`\n[codex verifier] ${agentCalls} agents`)
@@ -147,6 +167,11 @@ check('codex mode: non-advisory findings still verify via codex',
   !labels.some(l => l?.startsWith('verify:') && !l.includes('deps')),
   JSON.stringify(labels.filter(l => l?.includes('verify'))))
 check('codex mode: advisory is confirmed', codex.confirmed.filter(isAdv).every(f => f.votes === 1) && codex.confirmed.filter(isAdv).length === 6)
+// The codex wrapper writes a prompt, runs the CLI and returns the JSON. No reasoning
+// happens in it, so it must not burn the review tier.
+check('codex mode: the wrapper runs on the cheap tier',
+  opts.filter(o => o.label?.startsWith('codex-verify:')).every(o => o.model === 'haiku' && o.effort === 'low'),
+  JSON.stringify(opts.filter(o => o.label?.startsWith('codex-verify:')).map(o => [o.label, o.model])))
 
 const light = await run({ ...BASE, tier: 'light' })
 console.log(`\n[light tier] ${agentCalls} agents`)

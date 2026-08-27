@@ -46,6 +46,19 @@ const {
 // agent count; the selection is deterministic so resumes hit cache.
 const MAX_VERIFY_PER_LENS = 4
 
+// Pinned, and deliberately not exposed through `args`. An unpinned agent() inherits
+// whoever's session model is driving, so the same PR reviewed from an Opus session
+// and a Sonnet session produced different findings — that fork was invisible,
+// because nothing in the return payload recorded which model actually ran.
+// An override here would just restore the fork under a different name.
+const REVIEW_MODEL = 'opus'
+const REVIEW_EFFORT = 'high'
+
+// The codex path spawns a wrapper that writes a prompt, runs the CLI and returns the
+// JSON verbatim. Zero reasoning happens in it; the intelligence is codex's.
+const PROXY_MODEL = 'haiku'
+const PROXY_EFFORT = 'low'
+
 // Only these severities reach the author, and only after verification. "suggestion"
 // is a discard bucket, not an output channel: it exists so a lens holding a
 // non-defect observation has somewhere to put it other than `issue`. Nothing
@@ -310,12 +323,16 @@ function verifyOne(f, vote) {
       label: `codex-verify:${f.file}:${f.line}${suffix}`,
       phase: 'Verify',
       schema: VERDICT_SCHEMA,
+      model: PROXY_MODEL,
+      effort: PROXY_EFFORT,
     })
   }
   return agent(prompt, {
     label: `verify:${f.file}:${f.line}${suffix}`,
     phase: 'Verify',
     schema: VERDICT_SCHEMA,
+    model: REVIEW_MODEL,
+    effort: REVIEW_EFFORT,
   })
 }
 
@@ -361,6 +378,8 @@ const reviewed = await pipeline(
     label: `review:${lens.key}`,
     phase: 'Review',
     schema: FINDINGS_SCHEMA,
+    model: REVIEW_MODEL,
+    effort: REVIEW_EFFORT,
   }),
 
   // Discard non-defects, split the rest, then cap. Whatever the cap drops is
@@ -382,7 +401,13 @@ const reviewed = await pipeline(
     // same patch bump either way.
     const material = found.filter(f => MATERIAL.includes(f.severity))
 
-    material.sort((a, b) => (SEVERITY_RANK[a.severity] ?? 9) - (SEVERITY_RANK[b.severity] ?? 9))
+    // Severity first, then file and line. Without the tiebreakers, equal-severity
+    // findings keep the order the lens agent happened to emit them in, so which one
+    // the cap verifies and which one it drops changes run to run on identical input.
+    material.sort((a, b) =>
+      (SEVERITY_RANK[a.severity] ?? 9) - (SEVERITY_RANK[b.severity] ?? 9) ||
+      (a.file < b.file ? -1 : a.file > b.file ? 1 : 0) ||
+      (Number(a.line) || 0) - (Number(b.line) || 0))
 
     // The cap exists to bound refuter panels. An advisory is one cheap registry
     // check, and a lockfile bump routinely carries more than MAX_VERIFY_PER_LENS of
@@ -442,7 +467,7 @@ requirement nobody graded, a config or generated change nobody explained, and an
 behavior changed without a corresponding test.
 
 Report gaps in coverage, not new bugs you have not verified.`,
-    { label: 'critic:gaps', phase: 'Critic', schema: GAPS_SCHEMA },
+    { label: 'critic:gaps', phase: 'Critic', schema: GAPS_SCHEMA, model: REVIEW_MODEL, effort: REVIEW_EFFORT },
   )
 }
 
@@ -454,6 +479,7 @@ return {
   stats: {
     tier,
     verifyAgent,
+    reviewModel: REVIEW_MODEL,
     lenses: LENSES.map(l => l.key),
     confirmed: confirmed.length,
     refuted: rejected.length,
