@@ -1,0 +1,23 @@
+{
+  "pr": {
+    "repo": "yearn/kong",
+    "number": 402,
+    "title": "Add badge variants",
+    "body": "Adds success/error variants to the Badge component."
+  },
+  "issues": [],
+  "baseRef": "origin/main",
+  "diffStat": "src/components/Badge.tsx | 6 ++++--\n 1 file changed, 4 insertions(+), 2 deletions(-)",
+  "changedFiles": [
+    "src/components/Badge.tsx"
+  ],
+  "lintOutput": "\n> lint\n> echo 'lint: 0 problems'\n\nlint: 0 problems\n",
+  "newDeps": [],
+  "tier": "light",
+  "verifyAgent": "claude",
+  "detectedTier": "light",
+  "tierReason": "1 source file(s), ~6 changed source lines across 1 top-level dir(s), no sensitive paths",
+  "warnings": [
+    "no linked issue spec — the spec lens grades against the PR description"
+  ]
+}

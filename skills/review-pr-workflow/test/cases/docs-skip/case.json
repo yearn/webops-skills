@@ -1,0 +1,16 @@
+{
+  "id": "docs-skip",
+  "repo": "yearn/kong",
+  "number": 403,
+  "title": "Update guide docs",
+  "body": "Docs-only update, no code changes.",
+  "baseRefName": "main",
+  "url": "https://github.com/yearn/kong/pull/403",
+  "issues": [],
+  "lintScript": "echo 'lint: 0 problems'",
+  "expected": {
+    "tier": "skip",
+    "tierReason": "docs-only diff",
+    "plantedDefects": []
+  }
+}

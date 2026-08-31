@@ -1,0 +1,23 @@
+{
+  "pr": {
+    "repo": "yearn/kong",
+    "number": 403,
+    "title": "Update guide docs",
+    "body": "Docs-only update, no code changes."
+  },
+  "issues": [],
+  "baseRef": "origin/main",
+  "diffStat": "docs/guide.md | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)",
+  "changedFiles": [
+    "docs/guide.md"
+  ],
+  "lintOutput": "\n> lint\n> echo 'lint: 0 problems'\n\nlint: 0 problems\n",
+  "newDeps": [],
+  "tier": "skip",
+  "verifyAgent": "claude",
+  "detectedTier": "skip",
+  "tierReason": "docs-only diff",
+  "warnings": [
+    "no linked issue spec — the spec lens grades against the PR description"
+  ]
+}

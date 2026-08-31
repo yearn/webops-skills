@@ -1,0 +1,20 @@
+{
+  "id": "auth-session-full",
+  "repo": "yearn/kong",
+  "number": 412,
+  "title": "Add session refresh",
+  "body": "Adds refresh-token support to sessions near expiry.\n\nCloses #380",
+  "baseRefName": "main",
+  "url": "https://github.com/yearn/kong/pull/412",
+  "issues": [
+    { "number": 380, "body": "Sessions should support silent refresh near expiry instead of forcing re-login." }
+  ],
+  "lintScript": "echo 'lint: 0 problems'",
+  "expected": {
+    "tier": "full",
+    "tierReason": "sensitive path",
+    "plantedDefects": [
+      "src/auth/session.ts:24 — isSessionValid uses <= against expiresAt, so a session validates for one extra tick after expiry"
+    ]
+  }
+}

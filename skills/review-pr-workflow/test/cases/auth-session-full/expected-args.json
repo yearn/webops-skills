@@ -1,0 +1,29 @@
+{
+  "pr": {
+    "repo": "yearn/kong",
+    "number": 412,
+    "title": "Add session refresh",
+    "body": "Adds refresh-token support to sessions near expiry.\n\nCloses #380"
+  },
+  "issues": [
+    {
+      "number": 380,
+      "body": "Sessions should support silent refresh near expiry instead of forcing re-login."
+    }
+  ],
+  "baseRef": "origin/main",
+  "diffStat": "package.json        |  3 ++-\n src/auth/session.ts | 22 ++++++++++++++++++++--\n 2 files changed, 22 insertions(+), 3 deletions(-)",
+  "changedFiles": [
+    "package.json",
+    "src/auth/session.ts"
+  ],
+  "lintOutput": "\n> auth-session-fixture@1.0.0 lint\n> echo 'lint: 0 problems'\n\nlint: 0 problems\n",
+  "newDeps": [
+    "jsonwebtoken@9.0.0"
+  ],
+  "tier": "full",
+  "verifyAgent": "claude",
+  "detectedTier": "full",
+  "tierReason": "sensitivity trigger — sensitive path: src/auth/session.ts; added dependency: jsonwebtoken@9.0.0",
+  "warnings": []
+}

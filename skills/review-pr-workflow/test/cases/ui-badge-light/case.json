@@ -1,0 +1,20 @@
+{
+  "id": "ui-badge-light",
+  "repo": "yearn/kong",
+  "number": 402,
+  "title": "Add badge variants",
+  "body": "Adds success/error variants to the Badge component.",
+  "baseRefName": "main",
+  "url": "https://github.com/yearn/kong/pull/402",
+  "issues": [
+    { "number": 401, "body": "This issue exists in the tracker but the PR body below deliberately does not link it." }
+  ],
+  "lintScript": "echo 'lint: 0 problems'",
+  "expected": {
+    "tier": "light",
+    "tierReason": "1 source file, one top-level dir, no sensitive paths",
+    "plantedDefects": [
+      "src/components/Badge.tsx:6 — className concatenation missing separator, e.g. 'badge' + 'success' = 'badgesuccess'"
+    ]
+  }
+}
