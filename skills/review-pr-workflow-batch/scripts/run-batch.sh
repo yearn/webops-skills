@@ -4,7 +4,8 @@
 #
 # usage: run-batch.sh <run-dir>
 # env:
-#   REVIEW_TIER          pass-through tier for /review-pr-workflow (default: auto)
+#   REVIEW_TIER          pass-through tier for /review-pr-workflow (default: auto).
+#                        A manifest entry with a "tier" field overrides it for that PR.
 #   REVIEW_VERIFY_AGENT  claude | codex (default: claude)
 #   REVIEW_MODEL         optional --model override for the review sessions
 #   SESSION_CWD          worktree (default) | invocation | <abs path>
@@ -39,7 +40,11 @@ echo "run-batch: $COUNT PR(s), tier=$TIER verify-agent=$VERIFY_AGENT" >&2
 for i in $(seq 0 $((COUNT - 1))); do
   eval "$(jq -r ".[$i] | @sh \"
     SLUG=\(.repo) NUM=\(.number) TITLE=\(.title) URL=\(.url)
-    BASE_REF=\(.baseRef) WT=\(.worktree) UUID=\(.sessionId) REPO_NAME=\(.repoName)\"" "$MANIFEST")"
+    BASE_REF=\(.baseRef) WT=\(.worktree) UUID=\(.sessionId) REPO_NAME=\(.repoName)
+    TIER_OVERRIDE=\(.tier // \"\")\"" "$MANIFEST")"
+
+  # A manifest entry may pin its own tier; otherwise the batch-wide tier applies.
+  PR_TIER="${TIER_OVERRIDE:-$TIER}"
 
   case "$SESSION_CWD" in
     worktree)   CWD="$WT" ;;
@@ -49,7 +54,7 @@ for i in $(seq 0 $((COUNT - 1))); do
 
   LOG="$RUN_DIR/logs/$REPO_NAME-$NUM.log"
   echo "run-batch: [$((i + 1))/$COUNT] $SLUG#$NUM — $TITLE" >&2
-  echo "run-batch:   session $UUID  cwd $CWD" >&2
+  echo "run-batch:   session $UUID  cwd $CWD  tier $PR_TIER" >&2
 
   PROMPT=$(cat <<PROMPTEOF
 Run the /review-pr-workflow skill on pull request #$NUM of $SLUG.
@@ -58,7 +63,7 @@ Run the /review-pr-workflow skill on pull request #$NUM of $SLUG.
   Title:     $TITLE
   Worktree:  $WT
   Base ref:  origin/$BASE_REF
-  Args:      tier=$TIER verify-agent=$VERIFY_AGENT
+  Args:      tier=$PR_TIER verify-agent=$VERIFY_AGENT
 
 The worktree above is already checked out at the PR head in detached HEAD, and
 origin/$BASE_REF is fetched. Do NOT run 'gh pr checkout' or switch branches —
