@@ -18,13 +18,14 @@ Same scope as `review-pr`: **web/frontend projects** (React, TypeScript, Next.js
 ## Arguments
 
 ```
-/review-pr-workflow <pr-url-or-number> [verify-agent=claude|codex] [tier=auto|full|light|skip]
+/review-pr-workflow <pr-url-or-number> [verify-agent=claude|codex] [tier=auto|full|light|skip] [run-checks=true|false]
 ```
 
 | Arg | Default | Meaning |
 |-----|---------|---------|
 | `verify-agent` | `claude` | Which agent verifies findings in Phase 2. `claude` uses the session model. `codex` shells out to the `codex` CLI. |
 | `tier` | `auto` | How much horsepower to spend. `auto` detects from the diff (see Tier Detection). Anything else overrides detection. |
+| `run-checks` | `true` | Phase 0 lint and tests. Omitted or `true` runs them. Only explicit `false` skips — then neither the main loop nor any workflow agent runs lint, tests, or typecheck. |
 
 Example: `/review-pr-workflow https://github.com/yearn/kong/pull/412 verify-agent=codex tier=full`
 
@@ -52,7 +53,7 @@ Do all of this yourself. Subagents share one working directory; if they check ou
 2. **Read the PR body for instructions** — author's review notes, linked issues (`Closes #123`, `Fixes #456`, URLs).
 3. **Fetch linked issues** — read each issue body for the original spec. The review is graded against this, not against the PR description.
 4. **Checkout the PR branch locally.** Do this once, here. Every workflow agent is read-only from this point.
-5. **Run project linters** — `bun run lint`, `npm run lint`, whatever the project defines. Capture the output; it goes into the workflow as context so five agents don't each re-run it.
+5. **Run project linters and tests** unless the user passed `run-checks=false`. Omitted means run. Lint: `bun run lint`, `npm run lint`. Tests: `bun test`, `npm test`, whatever the project defines. Capture both; they go into the workflow as `lintOutput` and `testOutput` so agents don't each re-run them. Pass `runChecks` as a real boolean (`true`/`false`). If skipped, do not run lint, tests, or typecheck; set both outputs to `(skipped — run-checks=false)` — never leave them empty; empty is interpolated as `(clean)`.
 6. **Detect new dependencies** — if `package.json` changed, list newly added packages. These feed the dependency lens.
 7. **Detect the tier** (below) and **state it out loud with its reason** before spawning anything.
 
@@ -127,10 +128,12 @@ Pass these as real JSON values, never a JSON-encoded string.
 | `baseRef` | no | Base to diff against, e.g. `origin/main`. Defaults to `origin/HEAD`; pass it explicitly when the PR targets anything else. |
 | `diffStat` | no | Output of `gh pr diff --stat` |
 | `changedFiles` | no | Array of paths |
-| `lintOutput` | no | Phase 0's lint result, so five agents don't each re-run it |
+| `lintOutput` | no | Phase 0's lint result, so five agents don't each re-run it. On `run-checks=false`, the skip sentinel — not empty. |
+| `testOutput` | no | Phase 0's test result. Same skip-sentinel rule as `lintOutput`. |
 | `newDeps` | no | Newly added package names |
 | `tier` | no | `full` or `light`. `skip` throws — run `review-pr` inline instead. |
 | `verifyAgent` | no | `claude` (default) or `codex` |
+| `runChecks` | no | Real boolean. Default `true`. `false` forbids lint/test/typecheck in every agent prompt. |
 
 ### returns
 
@@ -186,7 +189,7 @@ Agent count scales with findings, not diff size. A PR yielding 2 blockers and 5 
 
 4. **Preview the review for the user.** Output the full review as plain markdown text in the conversation. Do not skip this. Do not substitute a tool-call preview.
 
-   Then, in **no more than four lines** outside the review body, report counts only: tier and why, `verify-agent`, `stats.refuted`, `stats.discarded`, `stats.advisories`, any duplicate collapse from step 2, and `stats.unverified`. Counts, not contents — do not summarise a refuted claim. Two exceptions to the line budget — if `gaps` is non-empty, list each gap in one line so the user can decide whether to re-run a lens; and if `stats.unverified` is non-zero, list those findings explicitly and say plainly that the review is not exhaustive; raising `MAX_VERIFY_PER_LENS` or re-running that lens is the fix.
+   Then, in **no more than four lines** outside the review body, report counts only: tier and why, `verify-agent`, `run-checks`, `stats.refuted`, `stats.discarded`, `stats.advisories`, any duplicate collapse from step 2, and `stats.unverified`. Counts, not contents — do not summarise a refuted claim. Two exceptions to the line budget — if `gaps` is non-empty, list each gap in one line so the user can decide whether to re-run a lens; and if `stats.unverified` is non-zero, list those findings explicitly and say plainly that the review is not exhaustive; raising `MAX_VERIFY_PER_LENS` or re-running that lens is the fix.
 
 5. **Post only after explicit approval.** Do not call any GitHub write tool before the user approves this specific review. A prior approval, a plan that mentioned posting, or this skill's own existence does not count.
 
