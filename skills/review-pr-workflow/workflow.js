@@ -37,10 +37,20 @@ const {
   diffStat = '',
   changedFiles = [],
   lintOutput = '',
+  testOutput = '',
   newDeps = [],
   tier = 'full',
   verifyAgent = 'claude',
+  runChecks = true,
 } = input
+
+const CHECKS = runChecks
+  ? `Lint output, already run — do not re-run lint or tests:
+${lintOutput || '(clean)'}
+
+Test output, already run — do not re-run it:
+${testOutput || '(clean)'}`
+  : `run-checks=false. Do not run lint, tests, typecheck, or any project script. Review the diff only.`
 
 // Verify at most this many findings per lens, highest severity first. Bounds the
 // agent count; the selection is deterministic so resumes hit cache.
@@ -72,8 +82,7 @@ ${changedFiles.join('\n')}
 Diffstat:
 ${diffStat}
 
-Lint output, already run — do not re-run it:
-${lintOutput || '(clean)'}
+${CHECKS}
 
 The PR branch is already checked out. You are READ-ONLY: do not checkout, commit,
 stash, start a dev server, or modify any file.

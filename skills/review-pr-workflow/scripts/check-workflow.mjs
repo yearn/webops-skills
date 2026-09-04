@@ -37,14 +37,17 @@ const FAKE = {
 const isAdv = f => Boolean(f.advisory)
 let agentCalls = 0
 let labels = []
+let prompts = []
 
 function makeEnv({ refuteAll = false } = {}) {
   agentCalls = 0
   labels = []
+  prompts = []
 
   async function agent(prompt, o = {}) {
     agentCalls++
     labels.push(o.label)
+    prompts.push({ label: o.label, prompt })
     if (o.label?.startsWith('review:')) return { findings: FAKE[o.label.split(':')[1]] ?? [] }
     if (o.label?.includes('verify:')) {
       const refuted = refuteAll || o.label.includes('bugs3')
@@ -169,6 +172,22 @@ check('[edge] tier=skip is rejected', /must not reach the workflow/.test(threw |
 threw = null
 try { await run({}) } catch (e) { threw = e.message }
 check('[edge] missing args.pr is rejected', /args\.pr is required/.test(threw || ''), threw)
+
+const specPrompt = (runArgs) => run(runArgs).then(() =>
+  prompts.find(p => p.label === 'review:spec')?.prompt || '')
+
+const defaultPrompt = await specPrompt({ ...BASE, tier: 'light' })
+check('[checks] omitted runChecks still forbids re-running lint/test',
+  /already run — do not re-run lint or tests/.test(defaultPrompt) &&
+  /Test output, already run/.test(defaultPrompt),
+  defaultPrompt.slice(0, 400))
+
+const skippedPrompt = await specPrompt({ ...BASE, tier: 'light', runChecks: false })
+check('[checks] runChecks=false forbids lint/test/typecheck and does not claim they ran',
+  /run-checks=false/.test(skippedPrompt) &&
+  /Do not run lint, tests, typecheck/.test(skippedPrompt) &&
+  !/already run/.test(skippedPrompt),
+  skippedPrompt.slice(0, 400))
 
 console.log(fails ? `\n${fails} failing` : '\nall checks passed')
 process.exit(fails ? 1 : 0)
