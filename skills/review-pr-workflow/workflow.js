@@ -44,12 +44,18 @@ const {
   runChecks = true,
 } = input
 
-const CHECKS = runChecks
-  ? `Lint output, already run — do not re-run lint or tests:
-${lintOutput || '(clean)'}
+// Only claim a check ran when its output is actually here. An empty output used to
+// interpolate as "(clean)", telling every agent a suite passed that may never have run.
+const checkLine = (label, out) =>
+  out
+    ? `${label}, already run — do not re-run it:
+${out}`
+    : `${label}: not run. Do not run it, and do not assume it passed.`
 
-Test output, already run — do not re-run it:
-${testOutput || '(clean)'}`
+const CHECKS = runChecks
+  ? `${checkLine('Lint output', lintOutput)}
+
+${checkLine('Test output', testOutput)}`
   : `run-checks=false. Do not run lint, tests, typecheck, or any project script. Review the diff only.`
 
 // Verify at most this many findings per lens, highest severity first. Bounds the
