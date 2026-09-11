@@ -10,7 +10,7 @@ Use this skill when:
 - User asks to pick from their review queue and review the selection
 
 Optional org argument narrows the queue, same as `my-reviews` (e.g. `/triage-reviews yearn`).
-Trailing `tier=`, `verify-agent=`, `model=` flags pass through to the batch untouched.
+Trailing `tier=`, `verify-agent=`, `run-checks=`, `model=` flags pass through to the batch untouched.
 
 ## Overview
 

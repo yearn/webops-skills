@@ -7,6 +7,8 @@
 #   REVIEW_TIER          pass-through tier for /review-pr-workflow (default: auto).
 #                        A manifest entry with a "tier" field overrides it for that PR.
 #   REVIEW_VERIFY_AGENT  claude | codex (default: claude)
+#   REVIEW_RUN_CHECKS    true | false (default: true). false tells every session to skip
+#                        Phase 0 lint and tests — the CI-covered batch case.
 #   REVIEW_MODEL         optional --model override for the review sessions
 #   SESSION_CWD          worktree (default) | invocation | <abs path>
 #   INVOCATION_DIR       where the batch was invoked from (default: $PWD)
@@ -19,6 +21,7 @@ RESULTS="$RUN_DIR/results.jsonl"
 
 TIER="${REVIEW_TIER:-auto}"
 VERIFY_AGENT="${REVIEW_VERIFY_AGENT:-claude}"
+RUN_CHECKS="${REVIEW_RUN_CHECKS:-true}"
 SESSION_CWD="${SESSION_CWD:-worktree}"
 INVOCATION_DIR="${INVOCATION_DIR:-$PWD}"
 
@@ -35,7 +38,7 @@ DENIED='Bash(gh pr review:*),Bash(gh pr comment:*),Bash(gh pr merge:*),Bash(gh p
 
 : > "$RESULTS"
 COUNT=$(jq length "$MANIFEST")
-echo "run-batch: $COUNT PR(s), tier=$TIER verify-agent=$VERIFY_AGENT" >&2
+echo "run-batch: $COUNT PR(s), tier=$TIER verify-agent=$VERIFY_AGENT run-checks=$RUN_CHECKS" >&2
 
 for i in $(seq 0 $((COUNT - 1))); do
   eval "$(jq -r ".[$i] | @sh \"
@@ -63,7 +66,7 @@ Run the /review-pr-workflow skill on pull request #$NUM of $SLUG.
   Title:     $TITLE
   Worktree:  $WT
   Base ref:  origin/$BASE_REF
-  Args:      tier=$PR_TIER verify-agent=$VERIFY_AGENT
+  Args:      tier=$PR_TIER verify-agent=$VERIFY_AGENT run-checks=$RUN_CHECKS
 
 The worktree above is already checked out at the PR head in detached HEAD, and
 origin/$BASE_REF is fetched. Do NOT run 'gh pr checkout' or switch branches —
