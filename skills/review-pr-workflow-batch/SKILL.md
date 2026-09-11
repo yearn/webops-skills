@@ -14,12 +14,12 @@ For a single PR, run `/review-pr-workflow` directly. This skill is a batch drive
 ## Arguments
 
 ```
-/review-pr-workflow-batch <pr>, <pr>, ... [tier=auto|full|light] [verify-agent=claude|codex] [model=<alias>]
+/review-pr-workflow-batch <pr>, <pr>, ... [tier=auto|full|light] [verify-agent=claude|codex] [run-checks=true|false] [model=<alias>]
 ```
 
 `<pr>` accepts `https://github.com/OWNER/REPO/pull/N`, `OWNER/REPO#N`, or `OWNER/REPO/N`. Separate with commas or whitespace. PRs may span different repos.
 
-Trailing flags apply to every PR in the batch and are passed straight through to `/review-pr-workflow`; `tier=auto` lets each session run its own tier detection, which is almost always what you want.
+Trailing flags apply to every PR in the batch and are passed straight through to `/review-pr-workflow`; `tier=auto` lets each session run its own tier detection, which is almost always what you want. `run-checks=false` skips Phase 0 lint and tests in every session — use it when CI already covers them.
 
 ## What it guarantees
 
@@ -54,7 +54,7 @@ Trailing flags apply to every PR in the batch and are passed straight through to
 Launch the driver in the background — a full-tier review runs well past any foreground command timeout:
 
 ```
-INVOCATION_DIR="$PWD" REVIEW_TIER=<tier> REVIEW_VERIFY_AGENT=<agent> \
+INVOCATION_DIR="$PWD" REVIEW_TIER=<tier> REVIEW_VERIFY_AGENT=<agent> REVIEW_RUN_CHECKS=<true|false> \
   scripts/run-batch.sh "$RUN_DIR"
 ```
 
