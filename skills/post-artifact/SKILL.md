@@ -75,7 +75,8 @@ bun run post-artifact \
 `--model` and `--effort` record who wrote the report: pass your own exact model
 ID and the reasoning effort you ran at (for example `low`, `medium`, `high`,
 `max`). Only pass a value you actually know from your context. Never guess;
-omit the flag instead, and the footer shows `unknown`.
+omit the flag instead. The footer shows `model (effort)`: a missing model shows
+as `unknown`, and a missing effort drops the parentheses.
 
 ## Configuration
 
