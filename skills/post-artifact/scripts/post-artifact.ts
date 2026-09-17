@@ -13,6 +13,8 @@ export type PostArtifactInput = {
   scanner?: string;
   ref?: string;
   commit?: string;
+  model?: string;
+  effort?: string;
   name?: string;
   retention?: Retention;
   serviceUrl?: string;
@@ -30,7 +32,9 @@ export function buildHeaders(input: PostArtifactInput): Record<string, string> {
     "x-report-repository": input.repository,
     "x-report-scanner": input.scanner,
     "x-report-ref": input.ref,
-    "x-report-commit": input.commit
+    "x-report-commit": input.commit,
+    "x-report-model": input.model,
+    "x-report-effort": input.effort
   };
   for (const [header, value] of Object.entries(provenance)) {
     if (value) headers[header] = value;
@@ -93,6 +97,8 @@ export function inputFromArgs(
     scanner: args.scanner,
     ref: args.ref,
     commit: args.commit,
+    model: args.model,
+    effort: args.effort,
     name: args.name,
     retention: parseRetention(args.retention),
     serviceUrl: args.url || env.ARTIFACTS_URL,

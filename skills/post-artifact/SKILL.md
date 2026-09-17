@@ -27,6 +27,21 @@ It prints JSON:
 Report the `url` verbatim. It is the only handle on the report: the stored name
 is random, there is no index, and nothing else records where the report went.
 
+## Test page
+
+`/post-artifact testpage` publishes `assets/testpage.md`, a fixed page that exercises
+the renderer: the heading ladder, four colorful mermaid diagrams, a table, nested
+lists, fenced code, and one deliberately broken diagram that must degrade to its own
+source.
+
+```bash
+bun run post-artifact --file ./skills/post-artifact/assets/testpage.md \
+  --scanner testpage --retention 1d --model <model-id> --effort <effort>
+```
+
+Publish it as-is. It is a fixture, so successive runs stay comparable — edit the file
+itself if a new renderer behavior needs covering, rather than varying the command.
+
 ## Retention
 
 Reports expire after 30 days by default. Pass `--retention` only when the user
@@ -52,8 +67,15 @@ bun run post-artifact \
   --repository yearn/webops-skills \
   --scanner example-scan \
   --ref main \
-  --commit "$(git rev-parse --short HEAD)"
+  --commit "$(git rev-parse --short HEAD)" \
+  --model claude-opus-5 \
+  --effort high
 ```
+
+`--model` and `--effort` record who wrote the report: pass your own exact model
+ID and the reasoning effort you ran at (for example `low`, `medium`, `high`,
+`max`). Only pass a value you actually know from your context. Never guess;
+omit the flag instead, and the footer shows `unknown`.
 
 ## Configuration
 

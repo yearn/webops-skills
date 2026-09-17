@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  buildHeaders,
   inputFromArgs,
   parseRetention,
   publishUrl
@@ -53,5 +54,27 @@ describe("retention arguments", () => {
       { file: "R.md", retention: "forever" },
       { ARTIFACTS_API_KEY: "k" }
     )).toThrow("invalid --retention");
+  });
+});
+
+describe("provenance headers", () => {
+  test("sends model and effort alongside the other report headers", () => {
+    const input = inputFromArgs(
+      { file: "R.md", scanner: "testpage", model: "claude-opus-5", effort: "high" },
+      { ARTIFACTS_API_KEY: "k" }
+    );
+    expect(buildHeaders(input)).toEqual({
+      authorization: "Bearer k",
+      "content-type": "application/octet-stream",
+      "x-report-scanner": "testpage",
+      "x-report-model": "claude-opus-5",
+      "x-report-effort": "high"
+    });
+  });
+
+  test("omits model and effort when not given", () => {
+    const headers = buildHeaders({ file: "R.md", ...KEY });
+    expect(headers).not.toHaveProperty("x-report-model");
+    expect(headers).not.toHaveProperty("x-report-effort");
   });
 });
