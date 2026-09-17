@@ -68,6 +68,7 @@ Custom skills for Claude Code and OpenAI Codex used by the WebOps team at Yearn 
 | `yearn-branding` | Add Yearn brand assets to projects |
 | `vuln-report-triage` | Triage inbound vulnerability reports to determine if they warrant investigation |
 | `yearn-vaults` | Query Yearn vault system documentation |
+| `yearn-internal-docs` | Read-only Q&A over the internal docs checkout at `~/git/internal-docs` |
 
 ## Ship-Spec: Full Dev Cycle Orchestration
 
