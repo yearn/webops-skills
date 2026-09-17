@@ -36,7 +36,7 @@ source.
 
 ```bash
 bun run post-artifact --file ./skills/post-artifact/assets/testpage.md \
-  --scanner testpage --retention 1d
+  --scanner testpage --retention 1d --model <model-id> --effort <effort>
 ```
 
 Publish it as-is. It is a fixture, so successive runs stay comparable — edit the file
@@ -67,8 +67,15 @@ bun run post-artifact \
   --repository yearn/webops-skills \
   --scanner example-scan \
   --ref main \
-  --commit "$(git rev-parse --short HEAD)"
+  --commit "$(git rev-parse --short HEAD)" \
+  --model claude-opus-5 \
+  --effort high
 ```
+
+`--model` and `--effort` record who wrote the report: pass your own exact model
+ID and the reasoning effort you ran at (for example `low`, `medium`, `high`,
+`max`). Only pass a value you actually know from your context. Never guess;
+omit the flag instead, and the footer shows `unknown`.
 
 ## Configuration
 
