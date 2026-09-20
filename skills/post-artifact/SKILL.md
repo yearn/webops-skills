@@ -44,16 +44,17 @@ itself if a new renderer behavior needs covering, rather than varying the comman
 
 ## Retention
 
-Reports expire after 30 days by default. Pass `--retention` only when the user
-requests another lifetime or the surrounding workflow already specifies one:
+Reports default to `archive`: no automatic expiration, but they can still be
+removed with authenticated DELETE. Use this default without asking about retention.
+Pass `--retention` only when the user or surrounding workflow specifies a lifetime.
 
 ```bash
 bun run post-artifact --file ./REPORT.md --retention 7d
 ```
 
-Accepted values are `1d`, `7d`, `30d`, `90d`, `1y`, and `archive`. Use
-`archive` only when the user explicitly requests no automatic expiration;
-never infer it. Do not ask about retention when the 30-day default is suitable.
+Accepted values are `1d`, `7d`, `30d`, `90d`, `1y`, and `archive`.
+Expiration limits retention; anyone holding the URL can read the report until
+it is removed.
 
 ## Provenance
 
