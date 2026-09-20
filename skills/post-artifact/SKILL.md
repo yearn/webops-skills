@@ -45,16 +45,8 @@ itself if a new renderer behavior needs covering, rather than varying the comman
 ## Retention
 
 Reports default to `archive`: no automatic expiration, but they can still be
-removed with authenticated DELETE. Use this default for ordinary documents
-without asking about retention.
-
-Before posting, read the report and assess whether it contains sensitive material,
-such as nonpublic vulnerabilities, exploit details, personal information, or internal
-operational details. If it does and retention has not already been specified,
-recommend a concrete expiration with a brief reason and get the user's choice
-before posting. For example, suggest `7d` for a vulnerability review or `30d` when
-remediation needs longer. Do not silently shorten retention. Honor an explicit
-user choice or retention already specified by the workflow, including archive.
+removed with authenticated DELETE. Use this default without asking about retention.
+Pass `--retention` only when the user or surrounding workflow specifies a lifetime.
 
 ```bash
 bun run post-artifact --file ./REPORT.md --retention 7d
