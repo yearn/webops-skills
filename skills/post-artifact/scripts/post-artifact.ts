@@ -45,11 +45,11 @@ export function buildHeaders(input: PostArtifactInput): Record<string, string> {
 export function publishUrl(input: PostArtifactInput): string {
   const name = input.name || basename(input.file);
   const base = (input.serviceUrl || DEFAULT_URL).replace(/\/+$/, "");
-  const prefix = input.retention && input.retention !== "30d" ? `/${input.retention}` : "";
+  const prefix = input.retention && input.retention !== "archive" ? `/${input.retention}` : "";
   return `${base}${prefix}/${encodeURIComponent(name)}`;
 }
 
-export function parseRetention(value = "30d"): Retention {
+export function parseRetention(value = "archive"): Retention {
   if (!RETENTIONS.includes(value as Retention)) {
     throw new Error(`invalid --retention: expected ${RETENTIONS.join(", ")}`);
   }

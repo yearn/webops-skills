@@ -14,7 +14,7 @@ describe("publish url", () => {
       .toBe("https://a.test/REPORT.md");
     expect(publishUrl({
       file: "/tmp/REPORT.md",
-      retention: "30d",
+      retention: "archive",
       serviceUrl: "https://a.test",
       ...KEY
     })).toBe("https://a.test/REPORT.md");
@@ -29,16 +29,16 @@ describe("publish url", () => {
     })).toBe("https://a.test/7d/REPORT.md");
     expect(publishUrl({
       file: "/tmp/REPORT.md",
-      retention: "archive",
+      retention: "30d",
       serviceUrl: "https://a.test",
       ...KEY
-    })).toBe("https://a.test/archive/REPORT.md");
+    })).toBe("https://a.test/30d/REPORT.md");
   });
 });
 
 describe("retention arguments", () => {
-  test("accepts every tier and defaults to 30d", () => {
-    expect(parseRetention()).toBe("30d");
+  test("accepts every tier and defaults to archive", () => {
+    expect(parseRetention()).toBe("archive");
     for (const retention of ["1d", "7d", "30d", "90d", "1y", "archive"]) {
       expect(parseRetention(retention)).toBe(retention);
     }
