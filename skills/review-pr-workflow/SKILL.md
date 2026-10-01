@@ -43,6 +43,18 @@ Advisory findings are the one exception: they are always verified by `claude`, w
 - Playwright or browser automation tooling for visual verification
 - `codex` CLI on PATH (only when `verify-agent=codex`)
 
+## Running in CI
+
+When the prompt says it is non-interactive CI:
+
+- The PR branch is already checked out — skip the checkout step.
+- If the prompt names a prefetched context directory, read PR metadata from it instead of calling `gh` (the sandbox has no network): `pr.json` (number, title, body, url), `issues.json` (array of `{number, title, body}`), `pr.diff`, `diffstat.txt`, `changed-files.txt`.
+- Pass the `pr.diff` contents as `diff`, subject to the size rule in Phase 0.
+- Skip tests and Playwright. Run lint only, through the allowlisted lint scripts.
+- Pass `maxVerifyPerLens` if the prompt specifies one.
+- Never ask questions or wait for approval.
+- Skip posting (Phase 4 step 5) — return the rendered review to the caller.
+
 ---
 
 ## Phase 0 — Main loop (before any subagent)
@@ -55,6 +67,7 @@ Do all of this yourself. Subagents share one working directory; if they check ou
 4. **Checkout the PR branch locally.** Do this once, here. Every workflow agent is read-only from this point.
 5. **Run project linters and tests** unless the user passed `run-checks=false`. Omitted means run. Lint: `bun run lint`, `npm run lint`. Tests: `bun test`, `npm test`, whatever the project defines. Capture both; they go into the workflow as `lintOutput` and `testOutput` so agents don't each re-run them. Pass `runChecks` as a real boolean (`true`/`false`). If skipped, or if the project defines no such script, leave the output empty — the workflow then tells every agent the check was not run instead of claiming it passed.
 6. **Detect new dependencies** — if `package.json` changed, list newly added packages. These feed the dependency lens.
+   **Capture the diff** — `git diff <baseRef>...HEAD -- . ':(exclude)*.lock' ':(exclude)*lock.json' ':(exclude)*lock.yaml'`, passed as `diff`. Omit it when it exceeds ~150,000 characters; agents then fall back to running `git diff` themselves.
 7. **Detect the tier** (below) and **state it out loud with its reason** before spawning anything.
 
 ### Tier Detection
@@ -134,6 +147,8 @@ Pass these as real JSON values, never a JSON-encoded string.
 | `tier` | no | `full` or `light`. `skip` throws — run `review-pr` inline instead. |
 | `verifyAgent` | no | `claude` (default) or `codex` |
 | `runChecks` | no | Real boolean. Default `true`. `false` forbids lint/test/typecheck in every agent prompt. |
+| `diff` | no | The PR diff as a string, embedded once in the shared prompt prefix so agents don't each run `git diff`. Omit it when empty or too large — agents then run `git diff <baseRef>...HEAD` themselves. |
+| `maxVerifyPerLens` | no | Positive number. Cap on non-advisory findings verified per lens. Default `4`; anything non-positive or non-numeric falls back to it. |
 
 ### returns
 
@@ -143,11 +158,11 @@ Pass these as real JSON values, never a JSON-encoded string.
 | `rejected` | Refuted findings, with the refutation reason. **Never shown to the author** — report to the user only. |
 | `dropped` | Material findings the per-lens cap left unverified. Not publishable as-is. |
 | `gaps` | Critic's coverage gaps (`full` tier only). Never in the review; listed to the user in step 4 so they can decide whether to re-run a lens. |
-| `stats` | `{ tier, verifyAgent, lenses, confirmed, refuted, unverified, discarded, advisories }` — `discarded` counts non-defect findings dropped before verification. |
+| `stats` | `{ tier, verifyAgent, lenses, confirmed, refuted, unverified, discarded, merged, advisories }` — `discarded` counts non-defect findings dropped before verification; `merged` counts exact `file:line` duplicates collapsed across lenses before verification. |
 
 ### Cost
 
-Agent count scales with findings, not diff size. A PR yielding 2 blockers and 5 issues costs ~17 agents at `full` tier (advisories are exempt from the cap — every one gets its registry check), ~7 at `light`. `MAX_VERIFY_PER_LENS` in `workflow.js` is the ceiling knob.
+Agent count scales with unique findings, not diff size. Findings reported by several lenses at the same `file:line` are merged before verification, so a duplicate costs nothing extra. After that, a PR yielding 2 unique blockers and 5 unique issues costs ~5 lens agents + 6 blocker votes (inherit the session model) + 5 single-vote verifiers (sonnet) + 1 critic (sonnet) at `full` tier, and the same without the critic or the extra blocker votes at `light`. Advisories are exempt from the cap — every one gets its registry check. `maxVerifyPerLens` (default 4) is the ceiling knob. With `verify-agent=codex`, the wrapper agents run on haiku.
 
 ---
 
@@ -158,7 +173,7 @@ Agent count scales with findings, not diff size. A PR yielding 2 blockers and 5 
    - Save screenshots to `/tmp/pr-review-{pr-number}/`, never inside the repo.
    - Skip entirely when the PR touches no UI.
 
-2. **Merge duplicate findings first.** The lenses overlap on purpose, so one defect routinely arrives two to four times in different words. That is a confidence signal, not four defects. Collapse `confirmed` entries naming the same defect at the same anchor into one, keeping the highest severity, the strictest `doneWhen`, and the `provenance` (they must agree; if they do not, one of the findings is wrong — verify before merging). Report the collapse in step 4, never in the review body — vote counts are your evidence, not the author's.
+2. **Merge duplicate findings first.** The lenses overlap on purpose, so one defect routinely arrives two to four times in different words. That is a confidence signal, not four defects. The workflow already collapses exact `file:line` duplicates before verification (`stats.merged`, `lenses` on each entry); assembly still merges near-duplicates — the same defect in different words or on neighbouring lines. Collapse `confirmed` entries naming the same defect at the same anchor into one, keeping the highest severity, the strictest `doneWhen`, and the `provenance` (they must agree; if they do not, one of the findings is wrong — verify before merging). Report the collapse in step 4, never in the review body — vote counts are your evidence, not the author's.
 
 3. **Assemble the review** using `review-pr`'s Review Format. Each return field has exactly one destination — do not mix them:
 
