@@ -432,7 +432,14 @@ LENSES.forEach((lens, i) => {
     }
     merged++
     if (!prev.lenses.includes(lens.key)) prev.lenses.push(lens.key)
-    if ((SEVERITY_RANK[f.severity] ?? 9) < (SEVERITY_RANK[prev.severity] ?? 9)) prev.severity = f.severity
+    // The stronger finding's text goes with its severity, or a blocker panel would
+    // verify an issue-level claim.
+    if ((SEVERITY_RANK[f.severity] ?? 9) < (SEVERITY_RANK[prev.severity] ?? 9)) {
+      Object.assign(prev, {
+        severity: f.severity, claim: f.claim, evidence: f.evidence,
+        doneWhen: f.doneWhen, provenance: f.provenance,
+      })
+    }
   }
 })
 

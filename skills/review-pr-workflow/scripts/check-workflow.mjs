@@ -210,7 +210,7 @@ check('[dedup] duplicate file:line verified once and merged',
   dup.stats.merged === 1 && dup.confirmed.length === 1 &&
   labels.filter(l => l?.startsWith('verify:')).length === 1 &&
   dupC.lenses.join(',') === 'spec,bugs' && dupC.lens === 'spec' &&
-  dupC.severity === 'blocker' && dupC.claim === 'spec says',
+  dupC.severity === 'blocker' && dupC.claim === 'bugs says',
   JSON.stringify({ merged: dup.stats.merged, labels, dupC }))
 
 const advFake = {
