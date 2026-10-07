@@ -42,6 +42,8 @@ const {
   tier = 'full',
   verifyAgent = 'claude',
   runChecks = true,
+  diff = '',
+  maxVerifyPerLens,
 } = input
 
 // Only claim a check ran when its output is actually here. An empty output used to
@@ -59,8 +61,18 @@ ${checkLine('Test output', testOutput)}`
   : `run-checks=false. Do not run lint, tests, typecheck, or any project script. Review the diff only.`
 
 // Verify at most this many findings per lens, highest severity first. Bounds the
-// agent count; the selection is deterministic so resumes hit cache.
-const MAX_VERIFY_PER_LENS = 4
+// agent count; the selection is deterministic so resumes hit cache. Overridable
+// with args.maxVerifyPerLens; anything that is not a positive number falls back.
+const DEFAULT_MAX_VERIFY_PER_LENS = 4
+const MAX_VERIFY_PER_LENS =
+  typeof maxVerifyPerLens === 'number' && maxVerifyPerLens > 0 ? Math.floor(maxVerifyPerLens) || DEFAULT_MAX_VERIFY_PER_LENS : DEFAULT_MAX_VERIFY_PER_LENS
+
+// Tier ladder. A wrong call that reaches the author stays on the session model: the
+// lenses and the blocker panel. Everything else is cheaper — single-vote and advisory
+// verifiers and the critic run on sonnet, and a codex wrapper only shells out (the
+// intelligence is codex), so it runs on haiku.
+const CHEAP = { model: 'sonnet', effort: 'medium' }
+const WRAPPER = { model: 'haiku', effort: 'low' }
 
 // Only these severities reach the author, and only after verification. "suggestion"
 // is a discard bucket, not an output channel: it exists so a lens holding a
@@ -72,6 +84,16 @@ const SEVERITY_RANK = { blocker: 0, issue: 1 }
 // A finding carrying a published advisory id. These are verified too, but against
 // the registry rather than by a refuter — see advisoryCheckPrompt.
 const isAdvisory = f => Boolean(f.advisory && f.advisory.trim() && f.advisory.trim() !== 'none')
+
+// One shared prefix is prompt-cached across agents, and an inlined diff saves each
+// of them a tool call. Without one, agents read the diff themselves.
+const DIFF_BLOCK = diff
+  ? `The full PR diff is included below. Do not regenerate it with a diff command.
+
+\`\`\`diff
+${diff}
+\`\`\``
+  : `Read the diff with: git diff ${baseRef}...HEAD`
 
 const CONTEXT = `
 PR ${pr.repo}#${pr.number}: ${pr.title}
@@ -92,7 +114,7 @@ ${CHECKS}
 
 The PR branch is already checked out. You are READ-ONLY: do not checkout, commit,
 stash, start a dev server, or modify any file.
-Read the diff with: git diff ${baseRef}...HEAD
+${DIFF_BLOCK}
 
 Report defects only: something that is wrong, missing, or unsafe, with a
 consequence you can name. Polish, preference, refactors, and "this would read
@@ -312,7 +334,8 @@ JSON, return refuted=true with reason "codex verification unavailable: <what
 happened>". An unverified claim must not reach the PR author.`
 }
 
-function verifyOne(f, vote) {
+// `inherit` runs the agent on the session model: only the blocker panel sets it.
+function verifyOne(f, vote, inherit = false) {
   const suffix = vote === undefined ? '' : `#${vote + 1}`
   const prompt = isAdvisory(f) ? advisoryCheckPrompt(f) : refutePrompt(f)
   // Advisory checks are a registry lookup, and `codex exec --sandbox read-only`
@@ -325,12 +348,14 @@ function verifyOne(f, vote) {
       label: `codex-verify:${f.file}:${f.line}${suffix}`,
       phase: 'Verify',
       schema: VERDICT_SCHEMA,
+      ...WRAPPER,
     })
   }
   return agent(prompt, {
     label: `verify:${f.file}:${f.line}${suffix}`,
     phase: 'Verify',
     schema: VERDICT_SCHEMA,
+    ...(inherit ? {} : CHEAP),
   })
 }
 
@@ -339,7 +364,7 @@ async function judge(f, lens) {
   // An advisory is a lookup with one right answer, so a panel would only buy three
   // copies of the same registry query — one check, and it must pass.
   const votes = (tier === 'full' && f.severity === 'blocker' && !isAdvisory(f))
-    ? (await parallel([0, 1, 2].map(i => () => verifyOne(f, i)))).filter(Boolean)
+    ? (await parallel([0, 1, 2].map(i => () => verifyOne(f, i, true)))).filter(Boolean)
     : [await verifyOne(f)].filter(Boolean)
 
   if (!votes.length) {
@@ -364,75 +389,90 @@ async function judge(f, lens) {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 1-2: review lenses, pipelined straight into verification
+// Phase 1-2: review lenses, dedup across lenses, then verification
 // ---------------------------------------------------------------------------
 
 phase('Review')
 
-const reviewed = await pipeline(
-  LENSES,
+// A barrier, not a pipeline: dedup needs every lens's findings before anything is
+// verified, otherwise each duplicate would be verified separately.
+const reviews = await parallel(LENSES.map(lens => () => agent(`${CONTEXT}\n\n${lens.prompt}`, {
+  label: `review:${lens.key}`,
+  phase: 'Review',
+  schema: FINDINGS_SCHEMA,
+})))
 
-  lens => agent(`${CONTEXT}\n\n${lens.prompt}`, {
-    label: `review:${lens.key}`,
-    phase: 'Review',
-    schema: FINDINGS_SCHEMA,
-  }),
+let discarded = 0
+let merged = 0
+const bySpot = new Map()
 
-  // Discard non-defects, split the rest, then cap. Whatever the cap drops is
-  // carried forward, not discarded — a silent truncation reads as "nothing found".
-  (result, lens) => {
-    const found = (result && result.findings) || []
+LENSES.forEach((lens, i) => {
+  const found = (reviews[i] && reviews[i].findings) || []
 
-    // The discard bucket. Counted so the user can see what the lenses wanted to
-    // say, then dropped: it reaches neither the assembler nor the author. An
-    // unverified non-blocking note still costs the author a context switch to
-    // read, judge and answer, and the wrong ones cost the round trip they were
-    // supposed to be too cheap to matter.
-    const discarded = found.filter(f => !MATERIAL.includes(f.severity))
+  // The discard bucket. Counted so the user can see what the lenses wanted to
+  // say, then dropped: it reaches neither the assembler nor the author. An
+  // unverified non-blocking note still costs the author a context switch to
+  // read, judge and answer, and the wrong ones cost the round trip they were
+  // supposed to be too cheap to matter.
+  const bucket = found.filter(f => !MATERIAL.includes(f.severity))
+  discarded += bucket.length
+  if (bucket.length) {
+    log(`lens ${lens.key}: ${bucket.length} non-defect finding(s) discarded before verification — reported to you as a count only`)
+  }
 
-    // Advisory findings verify like everything else — nothing reaches the author
-    // unverified. What differs is the question asked: advisoryCheckPrompt checks the
-    // version against the published affected range instead of inviting an
-    // exploitability argument, which is the wrong question since the remedy is the
-    // same patch bump either way.
-    const material = found.filter(f => MATERIAL.includes(f.severity))
-
-    material.sort((a, b) => (SEVERITY_RANK[a.severity] ?? 9) - (SEVERITY_RANK[b.severity] ?? 9))
-
-    // The cap exists to bound refuter panels. An advisory is one cheap registry
-    // check, and a lockfile bump routinely carries more than MAX_VERIFY_PER_LENS of
-    // them — every one is verified, none is ever dropped by the cap.
-    const advisories = material.filter(isAdvisory)
-    const judgeable = material.filter(f => !isAdvisory(f))
-    const toVerify = advisories.concat(judgeable.slice(0, MAX_VERIFY_PER_LENS))
-    const dropped = judgeable.slice(MAX_VERIFY_PER_LENS)
-
-    if (dropped.length) {
-      log(`lens ${lens.key}: ${material.length} material findings, verifying top ${toVerify.length} by severity — ${dropped.length} carried through unverified`)
+  // Lenses overlap on purpose, so one defect arrives 2-4 times. Collapse exact
+  // file:line matches here, before verification, so it is verified once. An
+  // advisory keys on its id too: its check is phrased around its own claim.
+  for (const f of found.filter(f => MATERIAL.includes(f.severity))) {
+    const key = isAdvisory(f) ? `${f.file}:${f.line}:${f.advisory.trim()}` : `${f.file}:${f.line}`
+    const prev = bySpot.get(key)
+    if (!prev) {
+      bySpot.set(key, { ...f, lens: lens.key, lenses: [lens.key] })
+      continue
     }
-    if (discarded.length) {
-      log(`lens ${lens.key}: ${discarded.length} non-defect finding(s) discarded before verification — reported to you as a count only`)
+    merged++
+    if (!prev.lenses.includes(lens.key)) prev.lenses.push(lens.key)
+    // The stronger finding's text goes with its severity, or a blocker panel would
+    // verify an issue-level claim.
+    if ((SEVERITY_RANK[f.severity] ?? 9) < (SEVERITY_RANK[prev.severity] ?? 9)) {
+      Object.assign(prev, {
+        severity: f.severity, claim: f.claim, evidence: f.evidence,
+        doneWhen: f.doneWhen, provenance: f.provenance,
+      })
     }
+  }
+})
 
-    return { lens: lens.key, toVerify, dropped, discarded: discarded.length }
-  },
+if (merged) log(`${merged} duplicate finding(s) merged across lenses before verification`)
 
-  async ({ lens, toVerify, dropped, discarded }) => {
-    const judged = (await parallel(toVerify.map(f => () => judge(f, lens)))).filter(Boolean)
-    return {
-      judged,
-      dropped: dropped.map(f => ({ ...f, lens })),
-      discarded,
-    }
-  },
-)
+// Highest severity first, then cap per primary lens. Whatever the cap drops is
+// carried forward, not discarded — a silent truncation reads as "nothing found".
+// Advisories verify like everything else, against the registry rather than by a
+// refuter (see advisoryCheckPrompt). They are one cheap check each and a lockfile
+// bump routinely carries more than the cap, so the cap never drops one.
+const material = [...bySpot.values()]
+  .sort((a, b) => (SEVERITY_RANK[a.severity] ?? 9) - (SEVERITY_RANK[b.severity] ?? 9))
 
-const lensResults = reviewed.filter(Boolean)
-const judged = lensResults.flatMap(r => r.judged)
+const toVerify = []
+const dropped = []
+const taken = {}
+for (const f of material) {
+  if (isAdvisory(f)) {
+    toVerify.push(f)
+    continue
+  }
+  taken[f.lens] = (taken[f.lens] || 0) + 1
+  ;(taken[f.lens] <= MAX_VERIFY_PER_LENS ? toVerify : dropped).push(f)
+}
+
+for (const lens of LENSES) {
+  const n = dropped.filter(f => f.lens === lens.key).length
+  if (n) log(`lens ${lens.key}: verifying top ${MAX_VERIFY_PER_LENS} by severity — ${n} carried through unverified`)
+}
+
+const judged = (await parallel(toVerify.map(f => () => judge(f, f.lens)))).filter(Boolean)
 const confirmed = judged.filter(f => f.survived)
 const rejected = judged.filter(f => !f.survived)
-const dropped = lensResults.flatMap(r => r.dropped)
-const discarded = lensResults.reduce((n, r) => n + (r.discarded || 0), 0)
 
 const advisories = confirmed.filter(isAdvisory)
 
@@ -457,7 +497,7 @@ requirement nobody graded, a config or generated change nobody explained, and an
 behavior changed without a corresponding test.
 
 Report gaps in coverage, not new bugs you have not verified.`,
-    { label: 'critic:gaps', phase: 'Critic', schema: GAPS_SCHEMA },
+    { label: 'critic:gaps', phase: 'Critic', schema: GAPS_SCHEMA, ...CHEAP },
   )
 }
 
@@ -474,6 +514,7 @@ return {
     refuted: rejected.length,
     unverified: dropped.length,
     discarded,
+    merged,
     advisories: advisories.length,
   },
 }

@@ -39,7 +39,7 @@ let agentCalls = 0
 let labels = []
 let prompts = []
 
-function makeEnv({ refuteAll = false } = {}) {
+function makeEnv({ refuteAll = false, fake = FAKE } = {}) {
   agentCalls = 0
   labels = []
   prompts = []
@@ -47,8 +47,8 @@ function makeEnv({ refuteAll = false } = {}) {
   async function agent(prompt, o = {}) {
     agentCalls++
     labels.push(o.label)
-    prompts.push({ label: o.label, prompt })
-    if (o.label?.startsWith('review:')) return { findings: FAKE[o.label.split(':')[1]] ?? [] }
+    prompts.push({ label: o.label, prompt, opts: o })
+    if (o.label?.startsWith('review:')) return { findings: fake[o.label.split(':')[1]] ?? [] }
     if (o.label?.includes('verify:')) {
       const refuted = refuteAll || o.label.includes('bugs3')
       return { refuted, reason: refuted ? 'not real' : 'holds up', correction: 'none' }
@@ -134,7 +134,8 @@ check('nothing unverified is returned as publishable',
 check('stats match payload',
   full.stats.confirmed === full.confirmed.length &&
   full.stats.unverified === full.dropped.length &&
-  full.stats.lenses.length === 5)
+  full.stats.lenses.length === 5 &&
+  full.stats.merged === 0)
 
 const codex = await run({ ...BASE, tier: 'full', verifyAgent: 'codex' })
 console.log(`\n[codex verifier] ${agentCalls} agents`)
@@ -197,6 +198,62 @@ check('[checks] runChecks=false forbids lint/test/typecheck and does not claim t
   /Do not run lint, tests, typecheck/.test(skippedPrompt) &&
   !/already run/.test(skippedPrompt),
   skippedPrompt.slice(0, 400))
+
+// (a) the same file:line from two lenses is verified once, merged.
+const dupFake = {
+  spec: [{ ...mkFinding('shared', 1, 'issue'), claim: 'spec says' }],
+  bugs: [{ ...mkFinding('shared', 1, 'blocker'), claim: 'bugs says' }],
+}
+const dup = await run({ ...BASE, tier: 'light' }, { fake: dupFake })
+const dupC = dup.confirmed[0]
+check('[dedup] duplicate file:line verified once and merged',
+  dup.stats.merged === 1 && dup.confirmed.length === 1 &&
+  labels.filter(l => l?.startsWith('verify:')).length === 1 &&
+  dupC.lenses.join(',') === 'spec,bugs' && dupC.lens === 'spec' &&
+  dupC.severity === 'blocker' && dupC.claim === 'bugs says',
+  JSON.stringify({ merged: dup.stats.merged, labels, dupC }))
+
+const advFake = {
+  bugs: [mkFinding('pkg', 1, 'issue')],
+  deps: [{ ...mkFinding('pkg', 1, 'issue'), advisory: 'GHSA-aaaa-bbbb-cccc' }],
+}
+const adv = await run({ ...BASE, tier: 'full' }, { fake: advFake })
+check('[dedup] advisory at the same file:line is not merged into another claim',
+  adv.stats.merged === 0 && labels.filter(l => l?.startsWith('verify:')).length === 2,
+  JSON.stringify({ merged: adv.stats.merged, labels }))
+
+// (b) maxVerifyPerLens caps judgeable findings per lens.
+const capped = await run({ ...BASE, tier: 'full', maxVerifyPerLens: 2 })
+check('[cap] maxVerifyPerLens=2 caps bugs at 2 verified, 3 carried through',
+  capped.dropped.filter(d => d.lens === 'bugs').length === 3 &&
+  [...capped.confirmed, ...capped.rejected].filter(f => f.file?.includes('bugs')).length === 2,
+  JSON.stringify(capped.dropped.map(d => d.file)))
+const badCap = await run({ ...BASE, tier: 'full', maxVerifyPerLens: -1 })
+check('[cap] non-positive maxVerifyPerLens falls back to 4',
+  badCap.dropped.filter(d => d.lens === 'bugs').length === 1)
+
+// (c) diff inlined vs left for agents to fetch.
+const withDiff = await specPrompt({ ...BASE, tier: 'light', diff: '+const inlined = 1' })
+check('[diff] non-empty diff is inlined and git diff is not suggested',
+  /\+const inlined = 1/.test(withDiff) && !/git diff/.test(withDiff) && /READ-ONLY/.test(withDiff),
+  withDiff.slice(0, 400))
+const noDiff = await specPrompt({ ...BASE, tier: 'light', diff: '' })
+check('[diff] empty diff falls back to git diff',
+  /git diff origin\/main\.\.\.HEAD/.test(noDiff))
+
+// (d) per-stage model opts.
+await run({ ...BASE, tier: 'full', verifyAgent: 'claude' })
+const optsOf = pred => prompts.filter(p => pred(p.label)).map(p => p.opts)
+check('[models] issue verifier and advisory check run on sonnet/medium',
+  optsOf(l => l === 'verify:src/clarity1.ts:11' || l === 'verify:src/deps1.ts:11')
+    .every(o => o.model === 'sonnet' && o.effort === 'medium'))
+check('[models] blocker panel at full tier and lenses inherit the session model',
+  optsOf(l => /^verify:src\/spec1\.ts:11#\d$/.test(l)).length === 3 &&
+  optsOf(l => /^verify:.*#\d$/.test(l) || l.startsWith('review:')).every(o => !o.model))
+check('[models] critic runs on sonnet', optsOf(l => l === 'critic:gaps')[0]?.model === 'sonnet')
+await run({ ...BASE, tier: 'full', verifyAgent: 'codex' })
+check('[models] codex wrapper runs on haiku/low',
+  optsOf(l => l?.startsWith('codex-verify:')).every(o => o.model === 'haiku' && o.effort === 'low'))
 
 console.log(fails ? `\n${fails} failing` : '\nall checks passed')
 process.exit(fails ? 1 : 0)
