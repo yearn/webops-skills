@@ -44,6 +44,10 @@ const {
   runChecks = true,
   diff = '',
   maxVerifyPerLens,
+  blameCommits = '',
+  auditOutput = '',
+  ci = false,
+  blockerVotes,
 } = input
 
 // Only claim a check ran when its output is actually here. An empty output used to
@@ -66,6 +70,11 @@ ${checkLine('Test output', testOutput)}`
 const DEFAULT_MAX_VERIFY_PER_LENS = 4
 const MAX_VERIFY_PER_LENS =
   typeof maxVerifyPerLens === 'number' && maxVerifyPerLens > 0 ? Math.floor(maxVerifyPerLens) || DEFAULT_MAX_VERIFY_PER_LENS : DEFAULT_MAX_VERIFY_PER_LENS
+
+// Blocker panel size at full tier. Odd so a majority always exists; anything that
+// is not a positive odd number falls back to 3.
+const BLOCKER_VOTES =
+  Number.isInteger(blockerVotes) && blockerVotes > 0 && blockerVotes % 2 === 1 ? blockerVotes : 3
 
 // Tier ladder. A wrong call that reaches the author stays on the session model: the
 // lenses and the blocker panel. Everything else is cheaper — single-vote and advisory
@@ -95,6 +104,14 @@ ${diff}
 \`\`\``
   : `Read the diff with: git diff ${baseRef}...HEAD`
 
+// The PR's own commits, precomputed by the caller, so a blame hash can be classified
+// without each agent walking history.
+const BLAME_BLOCK = blameCommits.trim()
+  ? `Commits in this PR (git log ${baseRef}..HEAD). A blame hash in this list was
+introduced by the PR; any other hash is pre-existing:
+${blameCommits.trim()}`
+  : ''
+
 const CONTEXT = `
 PR ${pr.repo}#${pr.number}: ${pr.title}
 
@@ -115,6 +132,7 @@ ${CHECKS}
 The PR branch is already checked out. You are READ-ONLY: do not checkout, commit,
 stash, start a dev server, or modify any file.
 ${DIFF_BLOCK}
+${BLAME_BLOCK}
 
 Report defects only: something that is wrong, missing, or unsafe, with a
 consequence you can name. Polish, preference, refactors, and "this would read
@@ -158,6 +176,7 @@ fix — not pre-existing issues elsewhere in the repo.`,
   },
   {
     key: 'deps',
+    cheap: true,
     prompt: `Newly added dependencies: ${newDeps.join(', ') || '(none)'}.
 For each, evaluate against the npm-policy skill's criteria and give a clear
 APPROVED or REJECTED with a one-line reason. If there are no new dependencies,
@@ -174,6 +193,7 @@ finding is published, so name one only when you have the range in front of you.`
   },
   {
     key: 'clarity',
+    cheap: true,
     prompt: `Find maintenance defects this PR introduces: behavior added with no
 test covering it, logic duplicated such that one copy will silently diverge from
 the other, and names or types that state something the code does not do. Every
@@ -183,9 +203,11 @@ normal outcome for this lens.`,
   },
 ]
 
+// The deps lens returns zero findings by contract when nothing was added, so
+// spawning it then only buys an empty answer.
 const LENSES = tier === 'light'
   ? ALL_LENSES.filter(l => l.key === 'spec' || l.key === 'bugs')
-  : ALL_LENSES
+  : ALL_LENSES.filter(l => l.key !== 'deps' || newDeps.length > 0)
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -295,13 +317,28 @@ those are not the claim. If the version fact holds but the surrounding wording i
 wrong, set refuted=false and put the accurate version fact in "correction":
 package, pinned version, severity, affected range, first patched version.
 
-Look it up with \`gh api /advisories/${f.advisory}\` for a GHSA id, or
-\`gh api "/advisories?cve_id=${f.advisory}"\` for a CVE id (the path form 404s on
-CVEs; the list form returns the matching GHSA entry). For npm packages
-\`npm audit --json\` in the repo also works. Default to refuted=true when you
-cannot confirm the range from one of those. An unchecked advisory claim must not
-reach the PR author.`
+${advisorySource()} Default to refuted=true when you cannot confirm the range
+from it. An unchecked advisory claim must not reach the PR author.`
 }
+
+function advisorySource() {
+  if (auditOutput) {
+    return `There is no network. Check the claim against this audit output, captured
+before the review started, and nothing else:
+
+\`\`\`json
+${auditOutput}
+\`\`\``
+  }
+  return `Look it up with \`gh api /advisories/<id>\` for a GHSA id, or
+\`gh api "/advisories?cve_id=<id>"\` for a CVE id (the path form 404s on
+CVEs; the list form returns the matching GHSA entry). For npm packages
+\`npm audit --json\` in the repo also works.`
+}
+
+// In CI the sandbox has no network, so without captured audit output a registry
+// check can only fail. Such advisories are carried as unverified, not refuted.
+const canCheckAdvisories = !ci || Boolean(auditOutput)
 
 // codex writes its final message to a file rather than stdout, so nothing has to
 // parse progress output. --output-schema constrains that message to VERDICT_SCHEMA.
@@ -364,7 +401,7 @@ async function judge(f, lens) {
   // An advisory is a lookup with one right answer, so a panel would only buy three
   // copies of the same registry query — one check, and it must pass.
   const votes = (tier === 'full' && f.severity === 'blocker' && !isAdvisory(f))
-    ? (await parallel([0, 1, 2].map(i => () => verifyOne(f, i, true)))).filter(Boolean)
+    ? (await parallel([...Array(BLOCKER_VOTES).keys()].map(i => () => verifyOne(f, i, true)))).filter(Boolean)
     : [await verifyOne(f)].filter(Boolean)
 
   if (!votes.length) {
@@ -400,6 +437,7 @@ const reviews = await parallel(LENSES.map(lens => () => agent(`${CONTEXT}\n\n${l
   label: `review:${lens.key}`,
   phase: 'Review',
   schema: FINDINGS_SCHEMA,
+  ...(lens.cheap ? CHEAP : {}),
 })))
 
 let discarded = 0
@@ -458,7 +496,8 @@ const dropped = []
 const taken = {}
 for (const f of material) {
   if (isAdvisory(f)) {
-    toVerify.push(f)
+    if (canCheckAdvisories) toVerify.push(f)
+    else dropped.push({ ...f, why: 'advisory not verifiable in CI: no network and no audit output' })
     continue
   }
   taken[f.lens] = (taken[f.lens] || 0) + 1

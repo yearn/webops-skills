@@ -48,10 +48,11 @@ Advisory findings are the one exception: they are always verified by `claude`, w
 When the prompt says it is non-interactive CI:
 
 - The PR branch is already checked out — skip the checkout step.
-- If the prompt names a prefetched context directory, read PR metadata from it instead of calling `gh` (the sandbox has no network): `pr.json` (number, title, body, url), `issues.json` (array of `{number, title, body}`), `pr.diff`, `diffstat.txt`, `changed-files.txt`.
+- If the prompt names a prefetched context directory, read PR metadata from it instead of calling `gh` (the sandbox has no network): `pr.json` (number, title, body, url), `issues.json` (array of `{number, title, body}`), `pr.diff`, `diffstat.txt`, `changed-files.txt`, `blame-commits.txt`, and `audit.json` when present. Never call `gh` in CI.
 - Pass the `pr.diff` contents as `diff`, subject to the size rule in Phase 0.
-- Skip tests and Playwright. Run lint only, through the allowlisted lint scripts.
-- Pass `maxVerifyPerLens` if the prompt specifies one.
+- Pass `ci: true`, `blame-commits.txt` as `blameCommits`, and `audit.json` as `auditOutput` when the file exists. Without audit output, advisory findings come back in `dropped` as not verifiable in CI — they are never refuted for lack of network.
+- Skip tests and Playwright. Run lint only, through the allowlisted lint scripts, and only if the prompt does not say `run-checks=false`.
+- Pass `maxVerifyPerLens` and `blockerVotes` if the prompt specifies them.
 - Never ask questions or wait for approval.
 - Skip posting (Phase 4 step 5) — return the rendered review to the caller.
 
@@ -107,7 +108,7 @@ The failure that matters is under-reviewing a small dangerous diff, not overspen
 
 | Tier | Review lenses | Verify votes: blocker / issue / advisory | Critic |
 |------|---------------|-----------------------------------------|--------|
-| `full` | all 5 | 3 / 1 / 1 | yes |
+| `full` | all 5 (`deps` only when a dependency was added) | 3 / 1 / 1 | yes |
 | `light` | spec-conformance + bugs | 1 / 1 / 1 | no |
 | `skip` | — run `review-pr` instead — | | |
 
@@ -149,6 +150,10 @@ Pass these as real JSON values, never a JSON-encoded string.
 | `runChecks` | no | Real boolean. Default `true`. `false` forbids lint/test/typecheck in every agent prompt. |
 | `diff` | no | The PR diff as a string, embedded once in the shared prompt prefix so agents don't each run `git diff`. Omit it when empty or too large — agents then run `git diff <baseRef>...HEAD` themselves. |
 | `maxVerifyPerLens` | no | Positive number. Cap on non-advisory findings verified per lens. Default `4`; anything non-positive or non-numeric falls back to it. |
+| `blameCommits` | no | Output of `git log --format=%h <baseRef>..HEAD`. Listed in the shared prompt so agents classify a blame hash as PR-introduced or pre-existing without walking history. |
+| `auditOutput` | no | `npm audit --json` / `bun audit --json` captured before the review. Advisory checks read it instead of calling `gh api`. |
+| `ci` | no | Real boolean. `true` means no network: without `auditOutput`, advisories are carried in `dropped` instead of verified. |
+| `blockerVotes` | no | Positive odd number. Blocker panel size at `full` tier. Default `3`; anything else falls back to it. |
 
 ### returns
 
@@ -156,13 +161,13 @@ Pass these as real JSON values, never a JSON-encoded string.
 |-------|----------|
 | `confirmed` | Findings that survived verification. These become Issues, and they are the only thing that becomes anything. Every entry has `votes >= 1`, advisories included — an advisory's single vote is a registry check, not a refutation attempt. |
 | `rejected` | Refuted findings, with the refutation reason. **Never shown to the author** — report to the user only. |
-| `dropped` | Material findings the per-lens cap left unverified. Not publishable as-is. |
+| `dropped` | Material findings the per-lens cap left unverified, plus advisories that could not be checked in CI (`why` says so). Not publishable as-is. |
 | `gaps` | Critic's coverage gaps (`full` tier only). Never in the review; listed to the user in step 4 so they can decide whether to re-run a lens. |
 | `stats` | `{ tier, verifyAgent, lenses, confirmed, refuted, unverified, discarded, merged, advisories }` — `discarded` counts non-defect findings dropped before verification; `merged` counts exact `file:line` duplicates collapsed across lenses before verification. |
 
 ### Cost
 
-Agent count scales with unique findings, not diff size. Findings reported by several lenses at the same `file:line` are merged before verification, so a duplicate costs nothing extra. After that, a PR yielding 2 unique blockers and 5 unique issues costs ~5 lens agents + 6 blocker votes (inherit the session model) + 5 single-vote verifiers (sonnet) + 1 critic (sonnet) at `full` tier, and the same without the critic or the extra blocker votes at `light`. Advisories are exempt from the cap — every one gets its registry check. `maxVerifyPerLens` (default 4) is the ceiling knob. With `verify-agent=codex`, the wrapper agents run on haiku.
+Agent count scales with unique findings, not diff size. Findings reported by several lenses at the same `file:line` are merged before verification, so a duplicate costs nothing extra. After that, a PR yielding 2 unique blockers and 5 unique issues costs ~5 lens agents (spec, bugs, security inherit the session model; clarity and deps run on sonnet; deps is skipped when no dependency was added) + 6 blocker votes (inherit the session model) + 5 single-vote verifiers (sonnet) + 1 critic (sonnet) at `full` tier, and the same without the critic or the extra blocker votes at `light`. Advisories are exempt from the cap — every one gets its registry check. `maxVerifyPerLens` (default 4) is the ceiling knob. With `verify-agent=codex`, the wrapper agents run on haiku.
 
 ---
 

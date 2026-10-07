@@ -85,7 +85,7 @@ async function run(args, opts) {
 const BASE = {
   pr: { repo: 'y/x', number: 1, title: 't', body: 'b' },
   issues: [{ number: 2, body: 'spec' }],
-  changedFiles: ['a.ts'], diffStat: 's', baseRef: 'origin/main',
+  changedFiles: ['a.ts'], diffStat: 's', baseRef: 'origin/main', newDeps: ['pkg'],
 }
 
 let fails = 0
@@ -247,13 +247,48 @@ const optsOf = pred => prompts.filter(p => pred(p.label)).map(p => p.opts)
 check('[models] issue verifier and advisory check run on sonnet/medium',
   optsOf(l => l === 'verify:src/clarity1.ts:11' || l === 'verify:src/deps1.ts:11')
     .every(o => o.model === 'sonnet' && o.effort === 'medium'))
-check('[models] blocker panel at full tier and lenses inherit the session model',
+check('[models] blocker panel and spec/bugs/security lenses inherit the session model',
   optsOf(l => /^verify:src\/spec1\.ts:11#\d$/.test(l)).length === 3 &&
-  optsOf(l => /^verify:.*#\d$/.test(l) || l.startsWith('review:')).every(o => !o.model))
+  optsOf(l => /^verify:.*#\d$/.test(l) || /^review:(spec|bugs|security)$/.test(l)).every(o => !o.model))
+check('[models] clarity and deps lenses run on sonnet/medium',
+  optsOf(l => l === 'review:clarity' || l === 'review:deps').length === 2 &&
+  optsOf(l => l === 'review:clarity' || l === 'review:deps').every(o => o.model === 'sonnet' && o.effort === 'medium'))
 check('[models] critic runs on sonnet', optsOf(l => l === 'critic:gaps')[0]?.model === 'sonnet')
 await run({ ...BASE, tier: 'full', verifyAgent: 'codex' })
 check('[models] codex wrapper runs on haiku/low',
   optsOf(l => l?.startsWith('codex-verify:')).every(o => o.model === 'haiku' && o.effort === 'low'))
+
+const noDeps = await run({ ...BASE, tier: 'full', newDeps: [] })
+check('[deps] deps lens is skipped when no dependency was added',
+  !labels.includes('review:deps') && noDeps.stats.lenses.join(',') === 'spec,bugs,security,clarity',
+  JSON.stringify(noDeps.stats.lenses))
+
+const ciNoAudit = await run({ ...BASE, tier: 'full', ci: true })
+check('[ci] without audit output, advisories are carried unverified, never refuted',
+  !labels.some(l => l?.startsWith('verify:src/deps')) &&
+  ciNoAudit.dropped.filter(isAdv).length === 6 &&
+  ciNoAudit.dropped.filter(isAdv).every(f => /not verifiable in CI/.test(f.why)) &&
+  !ciNoAudit.rejected.some(f => f.file.includes('deps')),
+  JSON.stringify(ciNoAudit.dropped.map(d => [d.file, d.why])))
+
+await run({ ...BASE, tier: 'full', ci: true, auditOutput: '{"audit":"captured"}' })
+const advPrompt = prompts.find(p => p.label === 'verify:src/deps1.ts:11')?.prompt || ''
+check('[ci] with audit output, advisories verify against it, not gh api',
+  /"audit":"captured"/.test(advPrompt) && !/gh api/.test(advPrompt),
+  advPrompt.slice(-400))
+
+const blamePrompt = await specPrompt({ ...BASE, tier: 'light', blameCommits: 'abc1234\ndef5678' })
+check('[blame] PR commits are listed in the shared context',
+  /Commits in this PR/.test(blamePrompt) && /def5678/.test(blamePrompt))
+const noBlame = await specPrompt({ ...BASE, tier: 'light' })
+check('[blame] no commit list when none supplied', !/Commits in this PR/.test(noBlame))
+
+const oneVote = await run({ ...BASE, tier: 'full', blockerVotes: 1 })
+check('[votes] blockerVotes=1 gives blockers a single vote',
+  oneVote.confirmed.filter(f => f.severity === 'blocker').every(f => f.votes === 1))
+const evenVote = await run({ ...BASE, tier: 'full', blockerVotes: 2 })
+check('[votes] even blockerVotes falls back to 3',
+  evenVote.confirmed.filter(f => f.severity === 'blocker').every(f => f.votes === 3))
 
 console.log(fails ? `\n${fails} failing` : '\nall checks passed')
 process.exit(fails ? 1 : 0)
