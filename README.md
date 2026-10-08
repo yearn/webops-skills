@@ -56,6 +56,7 @@ Custom skills for Claude Code and OpenAI Codex used by the WebOps team at Yearn 
 | `my-reviews` | List open PRs across GitHub where you are a requested reviewer |
 | `review-pr` | Review PRs and post feedback via GitHub tooling |
 | `review-pr-workflow` | Multi-agent PR review — fan-out lenses, adversarial verification of every finding |
+| `review-pr-lean` | Same lenses and verification as `review-pr-workflow` with batched verifiers, scripted prep, and concurrent checks — far fewer tokens and minutes |
 | `review-pr-workflow-batch` | Run `review-pr-workflow` across several PRs — one worktree and one resumable session each |
 | `triage-reviews` | Pick from your review queue and hand the picks to `review-pr-workflow-batch` |
 | `create-skill` | Create new agent skills |
