@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "chains": {
+    "1": "ethereum",
+    "10": "optimism",
+    "100": "gnosis",
+    "137": "polygon",
+    "146": "sonic",
+    "250": "fantom",
+    "8453": "base",
+    "42161": "arbitrum",
+    "747474": "katana"
+  },
+  "githubOrg": "yearn",
+  "budgetRepository": "yearn/budget",
+  "organizationRepository": "yearn/internal-docs",
+  "organizationPaths": [
+    "docs/team-structure.md",
+    "docs/partnerships.md"
+  ],
+  "publicOrganizationSources": [
+    "https://partners.yearn.fi/",
+    "https://docs.yearn.fi/developers/security/"
+  ],
+  "plausibleSite": "yearn.fi",
+  "prices": "https://prices.yearn.dev",
+  "linear": "https://api.linear.app/graphql",
+  "plausible": "https://plausible.io/api/v2/query",
+  "fed": "https://fred.stlouisfed.org/series/DFF",
+  "fedCSV": "https://fred.stlouisfed.org/graph/fredgraph.csv",
+  "stablecoins": "https://stablecoins.llama.fi/stablecoincharts/all",
+  "defiTvl": "https://api.llama.fi/v2/historicalChainTvl",
+  "maxSnapshotLagSeconds": 86400,
+  "maxPriceLagSeconds": 86400
+}

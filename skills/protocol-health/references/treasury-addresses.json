@@ -1,0 +1,612 @@
+{
+  "_tiers": {
+    "headline": "DAO-owned, counted in headline totals",
+    "inflight": "protocol fee inventory not yet swept to treasury (counted, shown separately)",
+    "contingent": "DAO-recoverable but committed/earmarked (shown separately, not liquid)",
+    "team-funds": "funds already disbursed to a team/ops multisig (disclosed, excluded from headline)",
+    "adjacent": "DAO-adjacent / ownership unverified (disclosed, excluded from headline)",
+    "excluded": "explicitly not treasury (documented for completeness)"
+  },
+  "addresses": {
+    "1": [
+      {
+        "address": "0xFEB4acf3df3cDEA7399794D0869ef76A6EfAff52",
+        "label": "ychad.eth (Yearn multisig)",
+        "tier": "headline",
+        "custody": "yChad Safe 6-of-9 (BORG guard)",
+        "source": "devdocs core-contracts.md"
+      },
+      {
+        "address": "0x93A62dA5a14C80f265DAbC077fCEE437B1a0Efde",
+        "label": "treasury.ychad.eth (TreasuryVault)",
+        "tier": "headline",
+        "custody": "TreasuryVault contract, governance = yChad",
+        "source": "devdocs core-contracts.md"
+      },
+      {
+        "address": "0x5B5AB518F532Ce260A5d2795E1eEc544FC159587",
+        "label": "RevenueRecipient (stYFI-era)",
+        "tier": "contingent",
+        "custody": "management yChad, operator DAO-ops Safe",
+        "source": "yearn/stYFI deployment.json",
+        "note": "only 10% of unallocated balance is treasury's; recovery earmark excluded"
+      },
+      {
+        "address": "0xbCc932e4750C3E465A7E54A06A34F9EdF8f6116b",
+        "label": "FundingDistributor",
+        "tier": "contingent",
+        "custody": "management = governance Executor 0xac7D4A37\u2026 (since 2026-10-27); vesting_owner yChad",
+        "source": "yearn/stYFI deployment.json",
+        "note": "holds the P4 team funding (401,000 yvUSDC-1 pre-funded 2026-10-27) until the passed proposals execute \u2192 committed, not liquid"
+      },
+      {
+        "address": "0xA66002E9ab0BABf46882D0E0cd274f46CEb13116",
+        "label": "BonusDistributor",
+        "tier": "contingent",
+        "custody": "management (read)",
+        "source": "yearn/stYFI deployment.json"
+      },
+      {
+        "address": "0xBA18D0DF75a3ff58EF40A8fc0d3E4dB74A0e681D",
+        "label": "LiquidLockerRedemption",
+        "tier": "contingent",
+        "custody": "management DAO-ops Safe",
+        "source": "yearn/stYFI deployment.json",
+        "note": "YIP-88 facility, up to 600 YFI"
+      },
+      {
+        "address": "0xd6AFd78C05f0d425F2b46359746dD44991dCB315",
+        "label": "YBC (Yearn Builder's Collective)",
+        "tier": "contingent",
+        "custody": "YBC contract",
+        "source": "yearn/stYFI deployment.json",
+        "note": "200 stYFI from yChad 2026-07-28; YIP-88 III: withdrawable to treasury"
+      },
+      {
+        "address": "0x5A74Cb32D36f2f517DB6f7b0A0591e09b22cDE69",
+        "label": "V3 Accountant (fee inventory)",
+        "tier": "inflight",
+        "custody": "feeManager brain.ychad",
+        "source": "yvUSDC-1.accountant()",
+        "note": "fills route via SMS Revenue Recipient 0xa9B5 \u2192 RevenueRecipient (10% treasury) or TreasuryVault; counted at 10% in headline per verifier"
+      },
+      {
+        "address": "0x590Dd9399bB53f1085097399C3265C7137c1C4Cf",
+        "label": "Dumper (fee inventory)",
+        "tier": "inflight",
+        "custody": "governance brain.ychad",
+        "source": "Accountant.feeRecipient()",
+        "note": "fills route via SMS Revenue Recipient 0xa9B5 \u2192 RevenueRecipient (10% treasury) or TreasuryVault; counted at 10% in headline per verifier"
+      },
+      {
+        "address": "0xac79f3e14d987727601485fb67c44d24ff147e8a",
+        "label": "Auction #1 (fee inventory)",
+        "tier": "inflight",
+        "custody": "governance brain.ychad",
+        "source": "skeptic A discovery",
+        "note": "fills route via SMS Revenue Recipient 0xa9B5 \u2192 RevenueRecipient (10% treasury) or TreasuryVault; counted at 10% in headline per verifier"
+      },
+      {
+        "address": "0xb89e40bbb7b6f00c35a0452a0b243ecd37e453a0",
+        "label": "Auction #2 (fee inventory)",
+        "tier": "inflight",
+        "custody": "governance brain.ychad",
+        "source": "skeptic A discovery"
+      },
+      {
+        "address": "0x898cb2e403b0a39a5ba89f74facd5f5c5ef161fe",
+        "label": "Auction #3 (fee inventory)",
+        "tier": "inflight",
+        "custody": "governance brain.ychad",
+        "source": "skeptic A discovery"
+      },
+      {
+        "address": "0xd6748776cf06a80ebe36cd83d325b31bb916bf54",
+        "label": "PullSplit (fee inventory)",
+        "tier": "inflight",
+        "custody": "immutable 0xSplits v2: TreasuryVault 75% / brain.ychad 25%",
+        "source": "skeptic A discovery",
+        "note": "treasury share 75%"
+      },
+      {
+        "address": "0x278374ffb10b7d16e7633444c13e6e565ea57c28",
+        "label": "RoboTreasury Stables reserve (Generic bucket)",
+        "tier": "inflight",
+        "custody": "governance yChad",
+        "source": "skeptic A discovery",
+        "note": "pass-through; empty"
+      },
+      {
+        "address": "0xe6136a227e8e5b35dbbbfa635d218aaed22299a0",
+        "label": "Split bucket (RoboTreasury)",
+        "tier": "inflight",
+        "custody": "governance yChad",
+        "source": "skeptic A/B discovery",
+        "note": "pass-through 50/50 to buyback buckets; dust"
+      },
+      {
+        "address": "0xe9103491c7d0a0215a027bface596e81fe73561d",
+        "label": "Buyback bucket A (WETH/cbBTC)",
+        "tier": "inflight",
+        "custody": "governance yChad (read)",
+        "source": "Split bucket outflows",
+        "note": "pass-through; empty"
+      },
+      {
+        "address": "0x088eef928995ccacd679245e6ec0aefe522feeaa",
+        "label": "Buyback bucket B (RoboTreasury)",
+        "tier": "inflight",
+        "custody": "governance yChad (read)",
+        "source": "Split bucket outflows",
+        "note": "pass-through; empty"
+      },
+      {
+        "address": "0x2161656baf2f556b538c380e6676996a82635737",
+        "label": "yChad yvUSDC-1\u2192yvWETH-1 auction",
+        "tier": "inflight",
+        "custody": "governance EOA 0x0bd007\u2026; receiver yChad",
+        "source": "skeptic A discovery"
+      },
+      {
+        "address": "0xABCDEF0028B6Cc3539C2397aCab017519f8744c8",
+        "label": "DAO-ops team Safe (2-of-4)",
+        "tier": "team-funds",
+        "custody": "DAO-ops Safe",
+        "source": "TeamAccountant operator / TeamRegistry owner"
+      },
+      {
+        "address": "0x0e0af03c405e17d0e486354fe709d3294d07ec44",
+        "label": "yAudit/yAcademy (Electisec) Safe 4-of-10",
+        "tier": "excluded",
+        "custody": "third-party Safe",
+        "source": "FundingDistributor claim recipient",
+        "note": "grantee; received 40k USDC via FundingDistributor 2026-08-14 \u2014 not DAO-ops"
+      },
+      {
+        "address": "0x044F9C86a0Da637a235E83564215DC271Bc0deFc",
+        "label": "yLockers Revenue Intake (SimpleTreasuryVault)",
+        "tier": "adjacent",
+        "custody": "governance yLockers Safe 0x4444aaaa\u2026",
+        "source": "yvyCRV.rewards()",
+        "note": "team fee sink governed by yLockers Safe; YIP-88 Part I \u00a710\u201311 compliance item"
+      },
+      {
+        "address": "0x4444aaaacdba5580282365e25b16309bd770ce4a",
+        "label": "yLockers team Safe",
+        "tier": "team-funds",
+        "custody": "Safe 2-of-5",
+        "source": "TeamRegistry team owner"
+      },
+      {
+        "address": "0xa927df41756770f334a879e0f18e42d6bae99c52",
+        "label": "dYFI redemption v2",
+        "tier": "adjacent",
+        "custody": "owner/payee 0xdDdd\u2026bCF Safe",
+        "source": "yChad YFI outflows (600 YFI)"
+      },
+      {
+        "address": "0xdDddddDD0005d49D9b508BF034B036aaB5818bCF",
+        "label": "dYFI redemption payee Safe",
+        "tier": "adjacent",
+        "custody": "Safe (non-yChad signers)",
+        "source": "dYFI redemption.payee()"
+      },
+      {
+        "address": "0xbbbbbbbb6b942883ead4976882c99201108c784d",
+        "label": "yETH pool management Safe (ylsd.eth) 3-of-5",
+        "tier": "team-funds",
+        "custody": "Safe 3-of-5 (one yChad signer)",
+        "source": "yChad yvWETH-1 outflow"
+      },
+      {
+        "address": "0xc001d00d425fa92c4f840baa8f1e0c27c4297a0b",
+        "label": "ytrades.ychad.eth token-dumper Safe 3-of-6",
+        "tier": "team-funds",
+        "custody": "Safe 3-of-6",
+        "source": "yChad yvcrvUSD-2 outflows"
+      },
+      {
+        "address": "0xd31911a33a5577Be233Dc096F6F5a7e496fF5934",
+        "label": "stYFI RewardDistributor",
+        "tier": "excluded",
+        "custody": "management DAO-ops Safe 2-of-4",
+        "source": "deployment.json",
+        "note": "rewards owed to stakers"
+      },
+      {
+        "address": "0x2548BF65916fdABB5A5673fC4225011FF29ee884",
+        "label": "veYFI RewardDistributor",
+        "tier": "excluded",
+        "custody": "management DAO-ops Safe 2-of-4",
+        "source": "deployment.json",
+        "note": "rewards owed to migrated veYFI holders"
+      },
+      {
+        "address": "0x9564850c7090b13794e6d1164b0826c0aeff3143",
+        "label": "yETH recovery claim",
+        "tier": "excluded",
+        "custody": "management yChad",
+        "source": "recovery vault flows",
+        "note": "user claims; unclaimed remainder swept to yChad 2026-07-28"
+      },
+      {
+        "address": "0xE5387cd454Dcc542421c069C009D915Ab9EFaaFd",
+        "label": "ysWETH yETH Recovery strategy (user token)",
+        "tier": "excluded",
+        "custody": "management yChad",
+        "source": "recovery vault accountant()",
+        "note": "user-facing recovery token; DAO holds RV shares instead"
+      },
+      {
+        "address": "0xEf77cc176c748d291EfB6CdC982c5744fC7211c8",
+        "label": "yRoboTreasury Treasury",
+        "tier": "headline",
+        "custody": "Treasury contract, management = yChad (to_management sweeps any token)",
+        "source": "yearn/yRoboTreasury deployment.json TREASURY; found by step-2 verifier",
+        "note": "missed in initial scoping"
+      },
+      {
+        "address": "0x05f0357d5473de607f2220eC150E7a402041e38d",
+        "label": "yRoboTreasury Robo",
+        "tier": "inflight",
+        "custody": "management yChad (read)",
+        "source": "yRoboTreasury deployment.json ROBO",
+        "note": "pass-through"
+      },
+      {
+        "address": "0xE8A15E381416063bC44CdB8E68ab41F8a05dB471",
+        "label": "RoboTreasury Stables buffer",
+        "tier": "inflight",
+        "custody": "management yChad (read)",
+        "source": "yRoboTreasury deployment.json STABLES_BUFFER"
+      },
+      {
+        "address": "0xF768B5A63e43DeC17ec5c14c1C70A4A4CA71cFef",
+        "label": "RoboTreasury Ether buffer",
+        "tier": "inflight",
+        "custody": "management yChad (read)",
+        "source": "yRoboTreasury deployment.json ETHER_BUFFER"
+      },
+      {
+        "address": "0xcd23d7FFbcC1ad53d4B675668c5c4eF586f630b7",
+        "label": "RoboTreasury YFI buyback bucket",
+        "tier": "inflight",
+        "custody": "management yChad (read)",
+        "source": "yRoboTreasury deployment.json YFI_BUYBACK"
+      },
+      {
+        "address": "0x79c67c41C8A28c32BB81ccb14B939a2C71a25db6",
+        "label": "RoboTreasury yvYFI-LP buyback bucket",
+        "tier": "inflight",
+        "custody": "management yChad (read)",
+        "source": "yRoboTreasury deployment.json YVYFILP_BUYBACK"
+      },
+      {
+        "address": "0x43c39e510Ee9D37f5917bCaA08bda031EBBF9dA6",
+        "label": "RoboTreasury Splitter",
+        "tier": "inflight",
+        "custody": "management yChad (read)",
+        "source": "yRoboTreasury deployment.json SPLITTER"
+      },
+      {
+        "address": "0xa9B58C59a299E4f21a0FfEC4c38CE8B88c33d5BE",
+        "label": "SMS Revenue Recipient (SimpleTreasuryVault)",
+        "tier": "inflight",
+        "custody": "governance brain.ychad.eth 3-of-8",
+        "source": "Auction #1 receiver(); step-2 verifier",
+        "note": "routes to TreasuryVault (2026-05-24) or RevenueRecipient (2026-07-22); post-YIP-88 treasury share = 10%"
+      },
+      {
+        "address": "0x1b7e6fb817112b036eaa4ae85479ff1c2e9330a2",
+        "label": "yCRV OTC SwapperV5 (working inventory)",
+        "tier": "headline",
+        "custody": "owner yChad (sweep \u2192 owner); management yLockers Safe",
+        "source": "step-2 completeness hunt",
+        "note": "holds st-yCRV/yCRV inventory; otcEnabled=false"
+      },
+      {
+        "address": "0x16388463d60FFE0661Cf7F1f31a7D658aC790ff7",
+        "label": "brain.ychad.eth (strategist/SMS Safe 3-of-8)",
+        "tier": "team-funds",
+        "custody": "Safe 3-of-8, no yChad signers",
+        "source": "devdocs core-contracts.md; step-2 hunt",
+        "note": "operational float funded by quarterly escrows"
+      },
+      {
+        "address": "0xf8de34d453db24ac97bc12dc841a8a8cd9e7d5ed",
+        "label": "DAO-ops P3 funding escrow (FundingDistributor vest)",
+        "tier": "team-funds",
+        "custody": "Simple Vesting Escrow, owner yChad",
+        "source": "FundingDistributor ClaimFunding 2026-08-13",
+        "note": "83,505 yvUSDC-1 vesting to DAO-ops Safe through 2026-10-15"
+      },
+      {
+        "address": "0x543e8871562a8C53E8B6a26835aeEcB3a5A13070",
+        "label": "Voting (onchain governance, stYFI)",
+        "tier": "excluded",
+        "custody": "management/operator DAO-ops Safe; guardian yChad",
+        "source": "yearn/stYFI deployment.json VOTING (deployed block 25883944)",
+        "note": "proposal lifecycle; holds no assets"
+      },
+      {
+        "address": "0x5069BcE8C8e371A45aB113604b128BBdF5Ee5c11",
+        "label": "Voter (vote submission + decay)",
+        "tier": "excluded",
+        "custody": "\u2014",
+        "source": "deployment.json VOTER",
+        "note": ""
+      },
+      {
+        "address": "0xac7D4A37Ba61C2CAc7f64d3e2b5773D85613Fe7b",
+        "label": "Executor (privileged-role holder for governance)",
+        "tier": "excluded",
+        "custody": "management yChad; operator = Voting contract",
+        "source": "deployment.json EXECUTOR",
+        "note": "holds management of FundingDistributor and five reward distributors since 2026-10-27"
+      },
+      {
+        "address": "0xA139250BCb3880A97C75fd4287D5bf2a6CAf98A3",
+        "label": "VoteBoostRewardDistributor",
+        "tier": "excluded",
+        "custody": "management DAO-ops (read)",
+        "source": "deployment.json VOTE_BOOST_REWARD_DISTRIBUTOR",
+        "note": "rewards owed to voters"
+      },
+      {
+        "address": "0xE05d0e9eaB8AD581fE5736d8EaA4224dED4Dac7E",
+        "label": "DelegatedStakingMiddleware",
+        "tier": "excluded",
+        "custody": "\u2014",
+        "source": "deployment.json DELEGATED_STAKING_MIDDLEWARE",
+        "note": ""
+      },
+      {
+        "address": "0x639b911b5bc81f48138e3d7ce2fb1973cffbe76f",
+        "label": "RoboTreasury Buyback bucket (yvUSDC-1, new 2026-10)",
+        "tier": "inflight",
+        "custody": "management yChad",
+        "source": "hunt 2026-10-29",
+        "note": "pass-through to conversion factory/auction"
+      },
+      {
+        "address": "0x3a005a2508f1c56af806b1d9690ef1b22e6d06cd",
+        "label": "RoboTreasury Conversion factory",
+        "tier": "inflight",
+        "custody": "management/operator yChad",
+        "source": "hunt 2026-10-29",
+        "note": "deploys per-want auctions; pass-through"
+      },
+      {
+        "address": "0xba21b0844ab5acdced351203d8a8c5fc942c0f75",
+        "label": "TreasuryVault legacy-LP liquidation auction (want yvUSDC-1)",
+        "tier": "inflight",
+        "custody": "governance = conversion factory (yChad); receiver Robo Treasury",
+        "source": "hunt 2026-10-29",
+        "note": "mid-auction inventory up to ~$50k; daily kicks since 2026-10-19"
+      },
+      {
+        "address": "0xf5593d1cd479346554d7074481374d3b59a11936",
+        "label": "P3 funding escrow \u2192 yLockers (0x4444aaaa\u2026)",
+        "tier": "team-funds",
+        "custody": "Simple Vesting Escrow, owner yChad; vested 2026-07-23\u219210-15",
+        "source": "FundingDistributor ClaimFunding (hunt 2026-10-29)",
+        "note": "fully vested; unclaimed remainder belongs to the team"
+      },
+      {
+        "address": "0xbaebce25c6e079f963ba96546ea0369618a9eead",
+        "label": "P3 funding escrow \u2192 Curation (0xe5e2Baf9\u2026)",
+        "tier": "team-funds",
+        "custody": "Simple Vesting Escrow, owner yChad; vested 2026-07-23\u219210-15",
+        "source": "FundingDistributor ClaimFunding (hunt 2026-10-29)",
+        "note": "fully vested; unclaimed remainder belongs to the team"
+      },
+      {
+        "address": "0xd4ea41f109097f6a1816894cbcf7a7e46d2020f0",
+        "label": "P3 funding escrow \u2192 Vaults (0x74AccF0E\u2026)",
+        "tier": "team-funds",
+        "custody": "Simple Vesting Escrow, owner yChad; vested 2026-07-23\u219210-15",
+        "source": "FundingDistributor ClaimFunding (hunt 2026-10-29)",
+        "note": "fully vested; unclaimed remainder belongs to the team"
+      },
+      {
+        "address": "0x3d4f23255902ade9581b47a1d2516e17a3f14e69",
+        "label": "P3 funding escrow \u2192 yAudit (0x8973B848\u2026)",
+        "tier": "team-funds",
+        "custody": "Simple Vesting Escrow, owner yChad; vested 2026-07-23\u219210-15",
+        "source": "FundingDistributor ClaimFunding (hunt 2026-10-29)",
+        "note": "fully vested; unclaimed remainder belongs to the team"
+      },
+      {
+        "address": "0x95547eDe56cF74B73dd78a37f547127dffDA6113",
+        "label": "stYFI StakingRewardDistributor",
+        "tier": "excluded",
+        "custody": "management Executor / DAO-ops",
+        "source": "yearn/stYFI deployment.json",
+        "note": "rewards owed to stakers / user locks"
+      },
+      {
+        "address": "0x952B31960C97E76362Ac340D07D183aDa15e3d6E",
+        "label": "stYFIx RewardDistributor",
+        "tier": "excluded",
+        "custody": "management Executor / DAO-ops",
+        "source": "yearn/stYFI deployment.json",
+        "note": "rewards owed to stakers / user locks"
+      },
+      {
+        "address": "0x7eFc3953Bed2fc20b9f825eBffaB1cC8B072a000",
+        "label": "LiquidLocker RewardDistributor",
+        "tier": "excluded",
+        "custody": "management Executor / DAO-ops",
+        "source": "yearn/stYFI deployment.json",
+        "note": "rewards owed to stakers / user locks"
+      },
+      {
+        "address": "0x53100f8979D3655a2E95465f583b0f4A11c8bbe1",
+        "label": "YBC RewardDistributor",
+        "tier": "excluded",
+        "custody": "management Executor / DAO-ops",
+        "source": "yearn/stYFI deployment.json",
+        "note": "rewards owed to stakers / user locks"
+      },
+      {
+        "address": "0x90c1f9220d90d3966FbeE24045EDd73E1d588aD5",
+        "label": "veYFI (legacy locks)",
+        "tier": "excluded",
+        "custody": "management Executor / DAO-ops",
+        "source": "yearn/stYFI deployment.json",
+        "note": "rewards owed to stakers / user locks"
+      },
+      {
+        "address": "0x87a5b535e91f9d3d964bedd58a8072eaf55a1c35",
+        "label": "yLockers Treasury-A clone (SimpleTreasuryVault)",
+        "tier": "adjacent",
+        "custody": "governance yLockers Safe 0x4444aaaa\u2026",
+        "source": "skeptic 2026-10-29",
+        "note": "received 217,368 ysUSDS (\u2248$257k bridged USDC, 2026-09-24) \u2014 DAO revenue vs product float unclassified"
+      },
+      {
+        "address": "0x7a6de4affaddc01b2780ff701f8722de53b6b364",
+        "label": "yLockers Treasury-A implementation (SimpleTreasuryVault)",
+        "tier": "adjacent",
+        "custody": "governance yLockers Safe",
+        "source": "skeptic 2026-10-29",
+        "note": ""
+      },
+      {
+        "address": "0x988feb96c388cc010564bb8c8ad5cec8d479a2a2",
+        "label": "YCrvRevenueSwapper (yLockers)",
+        "tier": "adjacent",
+        "custody": "yLockers",
+        "source": "skeptic 2026-10-29",
+        "note": "converts intake yvyCRV \u2192 yvcrvUSD-2 back into the intake; pass-through"
+      }
+    ],
+    "10": [
+      {
+        "address": "0xF5d9D6133b698cE29567a90Ab35CfB874204B3A7",
+        "label": "oChad multisig",
+        "tier": "headline",
+        "custody": "Safe",
+        "source": "devdocs core-contracts.md"
+      },
+      {
+        "address": "0x84654e35E504452769757AAe5a8C7C6599cBf954",
+        "label": "Optimism treasury",
+        "tier": "headline",
+        "custody": "governance oChad",
+        "source": "devdocs core-contracts.md"
+      }
+    ],
+    "137": [
+      {
+        "address": "0xC4ad0000E223E398DC329235e6C497Db5470B626",
+        "label": "pChad multisig",
+        "tier": "headline",
+        "custody": "Safe",
+        "source": "devdocs core-contracts.md"
+      }
+    ],
+    "250": [
+      {
+        "address": "0x89716ad7edc3be3b35695789c475f3e7a3deb12a",
+        "label": "Fantom treasury",
+        "tier": "headline",
+        "custody": "contract",
+        "source": "devdocs core-contracts.md",
+        "supplementTokens": [
+          "0xEF0210eB96c7EB36AF8ed1c20306462764935607",
+          "0x29b0Da86e484E1C0029B56e817912d778aC0EC69",
+          "0x04068DA6C83AFCFA0e13ba15A6696662335D5B75",
+          "0x8D11eC38a3EB5E956B052f67Da8Bdc9bef8Abf3E",
+          "0x049d68029688eAbF473097a2fC38ef61633A3C7A",
+          "0x21be370D5312f44cb42ce377BC9b8a0cEF1A4C83"
+        ]
+      },
+      {
+        "address": "0xC0E2830724C946a6748dDFE09753613cd38f6767",
+        "label": "Fantom gov multisig",
+        "tier": "headline",
+        "custody": "Safe",
+        "source": "skeptic A discovery",
+        "supplementTokens": [
+          "0xEF0210eB96c7EB36AF8ed1c20306462764935607",
+          "0x29b0Da86e484E1C0029B56e817912d778aC0EC69",
+          "0x04068DA6C83AFCFA0e13ba15A6696662335D5B75",
+          "0x21be370D5312f44cb42ce377BC9b8a0cEF1A4C83"
+        ]
+      }
+    ],
+    "8453": [
+      {
+        "address": "0xbfAABa9F56A39B814281D68d2Ad949e88D06b02E",
+        "label": "bChad multisig",
+        "tier": "headline",
+        "custody": "Safe",
+        "source": "Base treasury governance"
+      },
+      {
+        "address": "0x02ff746D8cb62709aEEc611CeC9B17d7dD1D3480",
+        "label": "Base treasury",
+        "tier": "headline",
+        "custody": "governance bChad",
+        "source": "devdocs core-contracts.md"
+      }
+    ],
+    "42161": [
+      {
+        "address": "0xb6bc033D34733329971B938fEf32faD7e98E56aD",
+        "label": "aChad multisig",
+        "tier": "headline",
+        "custody": "Safe",
+        "source": "devdocs core-contracts.md"
+      },
+      {
+        "address": "0x1DEb47dCC9a35AD454Bf7f0fCDb03c09792C08c1",
+        "label": "Arbitrum treasury",
+        "tier": "headline",
+        "custody": "governance aChad",
+        "source": "devdocs core-contracts.md"
+      }
+    ],
+    "747474": [
+      {
+        "address": "0xe6ad5A88f5da0F276C903d9Ac2647A937c917162",
+        "label": "kChad multisig (Katana)",
+        "tier": "headline",
+        "custody": "Safe",
+        "source": "skeptic A discovery",
+        "note": "documented Katana chad Safe (devdocs, yearn/monitoring); holds KAT incentives"
+      }
+    ]
+  },
+  "supplementTokens": {
+    "1": [
+      "0x0bc529c00C6401aEF6D220BE8C6Ea1667F6Ad93e",
+      "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+      "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+      "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+      "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+      "0xdC035D45d973E3EC169d2276DDab16f1e407384F",
+      "0xBe53A109B494E5c9f97b9Cd39Fe969BE68BF6204",
+      "0x863687e4e9751b57f38b4b0eba04744c72d0f7b8",
+      "0x696d02db93291651ed510704c9b286841d506987",
+      "0xae7d8db82480e6d8e3873ecbf22cf17b3d8a7308",
+      "0xd7a540ba3626c0aa66e7db4088971d0cd64695b6",
+      "0xc56413869c6CDf96496f2b1eF801fEDBdFA7dDB0",
+      "0x42b25284E8ae427D79da78b65DFFC232aAECc016",
+      "0x9C42461AA8422926e3AEF7B1C6e3743597149d79",
+      "0x41252E8691e964f7DE35156B68493bAb6797a275",
+      "0xFCc5c47bE19d06BF83eB04298b026F81069ff65b",
+      "0x27B5739e22ad9033bcBf192059122d163b60349D",
+      "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+      "0xdC035D45d973E3EC169d2276DDab16f1e407384F",
+      "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+      "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+      "0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD"
+    ],
+    "747474": [
+      "0x7f1f4b4b29f5058fa32cc7a97141b8d7e5abdc2d",
+      "0x6e9c1f88a960fe63387eb4b71bc525a9313d8461"
+    ]
+  }
+}
