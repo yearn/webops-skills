@@ -1,0 +1,11 @@
+{
+  "reviewedAt": "2026-10-30",
+  "note": "Executed claims prove funding; public requests supply calendar service intervals. These are dated historical approvals, not defaults for future proposals. Review new approvals and scope changes on every run.",
+  "requests": {
+    "vaults": {"issue":354,"name":"Vaults","period":3,"start":"2026-08-01T00:00:00.000Z","end":"2026-11-01T00:00:00.000Z"},
+    "ylockers": {"issue":352,"name":"yLockers","period":3,"start":"2026-08-01T00:00:00.000Z","end":"2026-11-01T00:00:00.000Z"},
+    "curation": {"issue":355,"name":"Curation","period":3,"start":"2026-08-01T00:00:00.000Z","end":"2026-11-01T00:00:00.000Z"},
+    "yaudit": {"issue":353,"name":"yAudit","period":3,"start":"2026-08-01T00:00:00.000Z","end":"2026-11-01T00:00:00.000Z"},
+    "dao-ops": {"issue":350,"name":"DAO-ops","period":3,"start":"2026-07-16T00:00:00.000Z","end":"2026-10-16T00:00:00.000Z"}
+  }
+}

@@ -1,0 +1,1109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<script>
+// Apply the persisted/device theme before the first paint. Storage is optional.
+(() => {
+  const storageKey = 'yearn-protocol-health-theme';
+  const preference = matchMedia('(prefers-color-scheme: dark)');
+  const modes = ['device', 'light', 'dark'];
+  const readPreference = () => {
+    try {
+      const value = localStorage.getItem(storageKey);
+      return modes.includes(value) ? value : 'device';
+    } catch { return 'device'; }
+  };
+  let mode = readPreference();
+  function apply() {
+    const root = document.documentElement;
+    root.dataset.theme = mode === 'device' ? (preference.matches ? 'dark' : 'light') : mode;
+    root.dataset.themeMode = mode;
+    document.dispatchEvent(new Event('yearn-theme-change'));
+  }
+  window.YearnTheme = {
+    get mode() { return mode; },
+    set(next) {
+      if (!modes.includes(next)) return;
+      mode = next;
+      try {
+        if (mode === 'device') localStorage.removeItem(storageKey);
+        else localStorage.setItem(storageKey, mode);
+      } catch { /* Keep the chosen mode in memory when storage is unavailable. */ }
+      apply();
+    },
+  };
+  preference.addEventListener('change', () => { if (mode === 'device') apply(); });
+  window.addEventListener('storage', event => {
+    if (event.key === storageKey || event.key === null) { mode = readPreference(); apply(); }
+  });
+  apply();
+})();
+
+</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>@@TITLE@@</title>
+<style>
+  :root {
+    --bg: #05060b;
+    --surface: #0c0f1c;
+    --surface-2: #111628;
+    --line: #1c2340;
+    --line-hi: #2a3566;
+    --text: #e8ebf7;
+    --muted: #858cae;
+    --dim: #4f5679;
+    --blue: #0657f9;
+    --blue-soft: rgba(6, 87, 249, 0.14);
+    --orange: #ff9a3d;
+    --good: #43edff;
+    --warn: #ffdc37;
+    --bad: #ff6a4d;
+    --radius: 14px;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { background: var(--bg); color: var(--text); font-family: Geist, system-ui, sans-serif; -webkit-font-smoothing: antialiased; overflow: hidden; }
+  .mono { font-family: "Geist Mono", ui-monospace, monospace; }
+
+  .app { height: 100vh; height: 100dvh; display: flex; flex-direction: column; padding: 16px 20px 20px; gap: 14px; }
+  header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .logo { width: 30px; height: 30px; border-radius: 50%; background: var(--blue); display: grid; place-items: center; font-weight: 700; font-size: 15px; color: #fff; flex: none; }
+  header h1 { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+  header .sub { color: var(--muted); font-size: 13px; }
+  .spacer { flex: 1; }
+  .verdict { font-size: 13px; color: #c3c8e0; max-width: 520px; line-height: 1.4; }
+  .verdict b { color: var(--bad); font-weight: 600; }
+  .badge { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; padding: 5px 9px; border-radius: 999px; border: 1px solid var(--line-hi); color: var(--muted); white-space: nowrap; }
+  .legend { display: flex; gap: 12px; font-size: 12px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+
+  .canvas { flex: 1; min-height: 0; display: grid; gap: 10px;
+    grid-template-columns: repeat(10, minmax(0, 1fr));
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.72fr);
+    grid-template-areas:
+      "kp kp ka ka vp vp km km cs cs"
+      "kp kp kr kr vp vp ch ch cs cs"
+      "co co co co co rv rv rv rv rv"; }
+
+  .tile { position: relative; min-height: 0; overflow: hidden; background: linear-gradient(180deg, var(--surface-2), var(--surface));
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; text-align: left; color: inherit; font: inherit;
+    display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: border-color .15s, transform .15s; }
+  .tile:hover { border-color: var(--line-hi); transform: translateY(-1px); }
+  .tile:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .tile.active { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue), 0 0 32px var(--blue-soft); }
+  .tile.featured { background: linear-gradient(180deg, #0b1a45, var(--surface)); border-color: #1a3070; }
+  .tile-head { display: flex; align-items: center; gap: 8px; }
+  .ico { width: 22px; height: 22px; border-radius: 6px; background: var(--blue-soft); color: #7da2ff; display: grid; place-items: center; flex: none; }
+  .ico svg { width: 13px; height: 13px; }
+  .tile-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; display: inline-block; }
+  .dot.good { background: var(--good); box-shadow: 0 0 10px rgba(67,237,255,.55); }
+  .dot.warn { background: var(--warn); box-shadow: 0 0 10px rgba(255,220,55,.5); }
+  .dot.bad { background: var(--bad); box-shadow: 0 0 10px rgba(255,106,77,.55); }
+  .dot.pending { background: transparent; border: 1.5px dashed var(--muted); }
+  .hl { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .hl-num { font-size: clamp(22px, 2.3vw, 34px); font-weight: 600; letter-spacing: -0.02em; line-height: 1.05; }
+  .hl-label { font-size: 12px; color: var(--muted); }
+  .delta { font-size: 12px; font-weight: 500; }
+  .delta.up { color: var(--good); } .delta.down { color: var(--bad); } .delta.flat { color: var(--muted); }
+  .summary { font-size: 13px; line-height: 1.45; color: #c3c8e0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: auto; }
+  .chip { font-size: 11px; padding: 3px 8px; border-radius: 999px; background: rgba(255,255,255,.04); border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+  .spark { width: 100%; height: 34px; flex: none; }
+  .spark svg { width: 100%; height: 100%; display: block; }
+  .tile.compact .summary { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+  .scrim { position: fixed; inset: 0; background: rgba(2,3,8,.55); backdrop-filter: blur(2px); opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 10; }
+  .scrim.open { opacity: 1; pointer-events: auto; }
+  .drawer { position: fixed; top: 0; right: 0; height: 100%; width: min(660px, 100%); background: var(--surface); border-left: 1px solid var(--line-hi);
+    transform: translateX(100%); transition: transform .25s cubic-bezier(.2,.8,.2,1); z-index: 11; display: flex; flex-direction: column; }
+  .drawer.open { transform: none; }
+  .d-head { padding: 20px 24px 16px; border-bottom: 1px solid var(--line); display: flex; gap: 12px; align-items: flex-start; }
+  .d-head h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  .d-sub { color: var(--muted); font-size: 13px; margin-top: 4px; line-height: 1.45; }
+  .d-status { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); margin-top: 10px; flex-wrap: wrap; }
+  .close { margin-left: auto; background: none; border: 1px solid var(--line-hi); color: var(--muted); border-radius: 8px; width: 32px; height: 32px; cursor: pointer; font-size: 18px; flex: none; }
+  .close:hover { color: var(--text); border-color: var(--muted); }
+  .d-body { padding: 20px 24px 32px; overflow-y: auto; display: flex; flex-direction: column; gap: 24px; }
+
+  .kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .kpi { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  .kpi .v { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+  .kpi .l { font-size: 11px; color: var(--muted); margin-top: 3px; text-transform: uppercase; letter-spacing: .06em; }
+  .section h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; margin-bottom: 10px; }
+  .chart { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  .chart svg { width: 100%; height: 150px; display: block; overflow: visible; }
+  .chart .axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--dim); margin-top: 6px; }
+  .chart .key { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-bottom: 8px; flex-wrap: wrap; }
+  .chart .key i { display: inline-block; width: 10px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+  .chart .range { display: flex; justify-content: space-between; font-size: 11px; color: var(--dim); margin-bottom: 4px; }
+  .bars { display: flex; flex-direction: column; gap: 8px; }
+  .bar-row { display: grid; grid-template-columns: 150px 1fr 64px; gap: 10px; align-items: center; font-size: 13px; }
+  .bar-row span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar-track { height: 8px; background: rgba(255,255,255,.05); border-radius: 4px; overflow: hidden; }
+  .bar-fill { height: 100%; background: var(--blue); border-radius: 4px; }
+  .bar-row .pct { text-align: right; color: var(--muted); font-size: 12px; }
+  table.t { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.t th { text-align: left; font-weight: 500; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; padding: 0 8px 8px 0; border-bottom: 1px solid var(--line); }
+  table.t td { padding: 8px 8px 8px 0; border-bottom: 1px solid var(--line); color: #c9cde3; }
+  table.t td.n, table.t th.n { text-align: right; font-family: "Geist Mono", monospace; }
+  ul.ins { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  ul.ins li { font-size: 14px; line-height: 1.5; padding-left: 16px; position: relative; color: #c9cde3; }
+  ul.ins li::before { content: ""; position: absolute; left: 0; top: 9px; width: 6px; height: 6px; border-radius: 50%; background: var(--blue); }
+  ul.ins.risk li::before { background: var(--bad); }
+  ul.ins.watch li::before { background: var(--warn); }
+  .rule { font-size: 12px; color: var(--muted); background: var(--surface-2); border: 1px dashed var(--line-hi); border-radius: 8px; padding: 10px 12px; line-height: 1.5; }
+  .src { font-size: 12px; color: var(--dim); line-height: 1.6; }
+
+  @media (max-width: 900px) {
+    body { overflow: auto; }
+    .app { height: auto; }
+    .canvas { grid-template-columns: 1fr 1fr; grid-template-rows: none; grid-auto-rows: minmax(170px, auto);
+      grid-template-areas: "km km" "rv rv" "co co" "vp vp" "cs ch" "kp ka" "kp kr"; }
+    .legend, .verdict { display: none; }
+  }
+  @media (max-width: 560px) {
+    .app { padding: 12px 16px 16px; }
+    .canvas { grid-template-columns: 1fr; grid-template-areas: "km" "rv" "co" "vp" "cs" "ch" "kp" "ka" "kr"; }
+    .kpis { grid-template-columns: 1fr 1fr; }
+    .bar-row { grid-template-columns: 100px 1fr 56px; }
+  }
+
+.metrics-tabs { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; margin-bottom: 22px; }
+.metrics-tab { padding: 12px; text-align: left; font: 11px 'Geist Mono',monospace; cursor: pointer; }
+
+
+.metrics-intro { color: var(--muted); font-size: 12px; line-height: 1.6; margin: 0 0 18px; }
+.metrics-heading { font: 600 22px 'Chakra Petch',sans-serif; color: var(--accent); margin-bottom: 8px; }
+.metrics-kpis { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.metrics-kpis .v { font-size: clamp(20px,4vw,30px); overflow-wrap: anywhere; }
+.metrics-source a { color: var(--accent); text-underline-offset: 3px; }
+.metrics-note { color: var(--muted); font: 11px/1.6 'Geist Mono',monospace; margin: 12px 0 24px; }
+
+
+.card-chart { margin-top: auto; padding-top: 12px; width: 100%; min-width: 0; flex-shrink: 0; }
+.card-chart-title,.card-chart-period,.card-chart-labels { font-family: "Geist Mono",monospace; font-size: 9px; line-height: 1.45; color: var(--muted); }
+.card-chart-title { margin-bottom: 6px; }
+.card-chart .spark { height: 48px; margin: 0; }
+.card-chart-period { margin-top: 5px; }
+.card-share { height: 13px; background: color-mix(in srgb,var(--accent) 12%,var(--surface)); border: 1px solid color-mix(in srgb,var(--accent) 32%,var(--line)); }
+.card-share>span { display: block; height: 100%; background: var(--accent); opacity: .8; }
+.card-chart-labels { display:flex; flex-wrap:wrap; justify-content:space-between; gap:3px 8px; margin-top:6px; }
+.card-categories { display:grid; gap:8px; color:var(--muted); font:11px "Geist Mono",monospace; }
+.card-categories>div { display:flex; align-items:center; gap:9px; }
+.card-category-mark { display:inline-block; width:27px; height:5px; background:var(--accent); opacity:.75; }
+@media(min-width:901px) and (max-height:820px) { .card-chart { padding-top:4px; } .card-chart .spark { height:25px; } .card-chart-title,.card-chart-period,.card-chart-labels { font-size:8px; } }
+</style>
+
+
+
+
+
+<style>
+:root {
+  --bg: #05080c; --surface: #081116; --surface-2: #0d191f;
+  --line: #20363f; --line-hi: #48efff; --text: #ecfaff;
+  --muted: #a4bac3; --dim: #6e929e; --blue: #43edff;
+  --blue-soft: #43edff12; --orange: #ffb64c;
+  --good: #43edff; --warn: #ffc15c; --bad: #ff638f; --radius: 2px;
+}
+body {
+  background: radial-gradient(ellipse at 72% -15%, #15363d75, transparent 55%),
+    radial-gradient(ellipse at 0 100%, #6c205229, transparent 45%), #05080c;
+}
+body::before {
+  content: ''; position: fixed; inset: 0; pointer-events: none;
+  background-image: radial-gradient(#65d7e51c .7px, transparent .8px);
+  background-size: 7px 7px; z-index: -1;
+}
+.app { max-width: 1800px; margin: auto; padding: 20px 24px 14px; gap: 12px; min-height: 0; height: 100vh; height: 100dvh; }
+header { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: start; flex-shrink: 0; }
+.brandline { display: flex; align-items: center; gap: 12px; margin-bottom: 9px; }
+.wordmark { font-size: 15px; font-weight: 700; letter-spacing: .08em; }
+.brandline .brand-divider { color: #4d6c77; }
+.system-label { color: #7da5b2; font: 10px 'Geist Mono', monospace; letter-spacing: .15em; }
+.logo { width: 26px; height: 26px; border-radius: 0; color: #041115; background: #43edff; box-shadow: 0 0 18px #43edff40; font-size: 18px; }
+header h1 { font: 600 34px/1.1 'Chakra Petch', Geist, sans-serif; letter-spacing: -.025em; }
+header h1 span { color: var(--blue); }
+header .sub { margin-top: 11px; font: 11px/1.5 'Geist Mono', monospace; color: var(--muted); }
+.preview-meta { display: flex; flex-direction: column; align-items: end; gap: 18px; padding-top: 2px; }
+
+
+.legend { gap: 20px; font: 10px 'Geist Mono', monospace; }
+.legend .dot { width: 6px; height: 6px; }
+.verdict { grid-column: 1 / -1; max-width: none; border: 1px solid #ff638f35; border-left: 3px solid var(--bad); background: linear-gradient(90deg,#ff638f09,transparent); padding: 12px 16px; font-size: 12px; line-height: 1.5; color: #b7cbd2; }
+.verdict::before { content: 'HEALTH SIGNAL'; color: var(--bad); font: 10px 'Geist Mono', monospace; letter-spacing: .12em; margin-right: 18px; }
+.canvas { gap: 12px; grid-template-rows: minmax(0,1fr) minmax(0,1fr) minmax(0,.9fr); }
+.tile { --accent: #43edff; padding: 13px 14px; gap: 8px; border-color: var(--line); background: linear-gradient(135deg,#10242b70,transparent 60%),#091217ed; transition: background-color 100ms, color 100ms; }
+.tile::before { content: ''; position: absolute; height: 2px; width: 46px; background: var(--accent); top: 0; left: 0; box-shadow: 0 0 11px var(--accent); }
+.tile::after { content: '+'; position: absolute; bottom: 6px; right: 9px; color: #4b7685; font: 14px 'Geist Mono', monospace; pointer-events: none; }
+.tile:has(.dot.warn) { --accent: #ffc15c; }
+.tile:has(.dot.bad) { --accent: #ff638f; }
+.tile.featured { background: linear-gradient(135deg,#43edff09,transparent 70%),#09151b; border-color: #31515f; }
+.tile.featured::before { width: 100%; opacity: .85; }
+.tile:hover, .tile.active { border-color: var(--accent); background-color: #101f26; box-shadow: inset 0 0 22px #43edff05,0 0 20px #43edff0b; }
+.tile.active { background-color: color-mix(in srgb,var(--accent) 9%,#091217); box-shadow: inset 0 0 0 1px color-mix(in srgb,var(--accent) 25%,transparent),0 0 18px color-mix(in srgb,var(--accent) 12%,transparent); }
+.tile.active::before { width: 100%; }
+.tile:active { transform: none; border-color: var(--accent); background-color: color-mix(in srgb,var(--accent) 17%,#091217); box-shadow: inset 0 0 24px color-mix(in srgb,var(--accent) 13%,transparent),0 0 14px color-mix(in srgb,var(--accent) 22%,transparent); transition-duration: 65ms; }
+.tile-head { gap: 8px; padding-bottom: 4px; }
+.ico { background: transparent; color: var(--accent); border-radius: 0; width: 16px; height: 17px; }
+.ico svg { width: 15px; height: 15px; }
+.tile-title { color: var(--accent); font: 600 13px/1.25 'Geist Mono', monospace; letter-spacing: .025em; white-space: normal; text-wrap: balance; text-shadow: 0 0 10px color-mix(in srgb,var(--accent) 18%,transparent); }
+.dot { width: 6px; height: 6px; border-radius: 1px; }
+.dot.good { box-shadow: 0 0 9px #43edff80; }
+.dot.warn { box-shadow: 0 0 9px #ffc15c80; }
+.dot.bad { box-shadow: 0 0 9px #ff638f80; }
+.hl { gap: 7px 9px; }
+.hl-num { color: var(--accent); font: 600 clamp(31px,2.7vw,47px)/1 'Chakra Petch',monospace; letter-spacing: -.02em; text-shadow: 0 0 18px color-mix(in srgb,var(--accent) 24%,transparent); }
+.hl-label { font: 10px/1.5 'Geist Mono',monospace; color: #a0b8c3; }
+.delta { font: 10px/1.5 'Geist Mono',monospace; }
+.summary { font-size: 12px; line-height: 1.55; color: #b6ccd5; flex-shrink: 0; }
+.tile.compact { gap: 7px; padding-top: 12px; padding-bottom: 12px; }
+.tile.compact .hl { row-gap: 4px; }
+.tile.compact .hl-num { font-size: 34px; }
+.chips { gap: 6px; padding-top: 7px; }
+.chip { font: 9px/1.5 'Geist Mono',monospace; padding: 3px 6px; border-radius: 1px; border-color: #27414e; background: #43edff03; color: #91b2c1; }
+.spark { margin-top: auto; height: 36px; filter: drop-shadow(0 0 3px #43edff45); }
+.spark path[stroke] { stroke: var(--accent); }
+.more { bottom: 10px; right: 22px; color: var(--accent); font: 9px 'Geist Mono',monospace; }
+.sample-footer { display: flex; justify-content: space-between; align-items: center; font: 9px/1.5 'Geist Mono',monospace; letter-spacing: .08em; color: #83a5b3; flex-shrink: 0; }
+.sample-footer a { color: #a7c6d4; text-decoration: none; }
+.sample-footer a:hover { color: var(--blue); }
+.footer-led { display: inline-block; width: 5px; height: 5px; background: var(--blue); box-shadow: 0 0 7px var(--blue); margin-right: 8px; }
+.scrim { background: #03080db3; backdrop-filter: blur(7px); transition: opacity 130ms ease-out; }
+.drawer { background: #091218; border-left: 1px solid var(--blue); box-shadow: -12px 0 70px #0008; transform: translateX(32px); opacity: 0; visibility: hidden; pointer-events: none; transition: transform 140ms cubic-bezier(.4,0,.6,1),opacity 120ms ease-in,visibility 0s linear 140ms; }
+.drawer.open { transform: translateX(0); opacity: 1; visibility: visible; pointer-events: auto; transition: transform 160ms cubic-bezier(.2,.8,.2,1),opacity 130ms ease-out,visibility 0s; }
+.d-head { border-bottom-color: #31515f; background: linear-gradient(90deg,#43edff0b,transparent); padding-top: 27px; }
+.d-head h2 { color: var(--blue); font-family: 'Chakra Petch',sans-serif; font-size: 29px; }
+.d-status { font-family: 'Geist Mono',monospace; font-size: 10px; }
+.close, .kpi, .chart, .rule { border-radius: 2px; }
+.close { border-color: #356575; color: var(--blue); }
+.close { transition: background-color 80ms,color 80ms; }
+.close:active { transform: none; background-color: #43edff1c; color: var(--blue); }
+.close:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+.kpi { background-image: radial-gradient(#43edff13 .7px,transparent .8px); background-size: 5px 5px; }
+.kpi .v { font: 600 26px 'Chakra Petch',monospace; color: var(--blue); }
+.section h3 { font-family: 'Geist Mono',monospace; font-size: 10px; color: #a7c6d4; }
+.chart .key, .chart .range, .chart .axis, .rule, .src { font-family: 'Geist Mono',monospace; font-size: 10px; }
+.bar-fill { border-radius: 0; box-shadow: 0 0 10px #43edff50; }
+.bar-track { border-radius: 0; }
+.d-body { min-height: 0; flex: 1; overscroll-behavior: contain; }
+.d-head { flex-shrink: 0; }
+@media(min-width:901px) {
+  html,body { overflow: hidden; }
+  .tile-head { flex-shrink: 0; }
+  .tile.compact .hl, .tile[data-i='4'] .hl { display: grid; grid-template-columns: max-content 1fr; gap: 3px 7px; align-items: end; }
+  .tile.compact .delta, .tile[data-i='4'] .delta { grid-column: 1 / -1; }
+  .tile[data-i='4'] .summary { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+}
+@media(min-width:901px) and (max-height:950px) {
+  .app { padding: 14px 20px 10px; gap: 10px; }
+  header { gap: 10px; }
+  header h1 { font-size: 28px; }
+  header .sub { margin-top: 6px; }
+  .brandline { margin-bottom: 6px; }
+  .verdict { padding: 8px 12px; font-size: 11px; }
+  .canvas { gap: 9px; }
+  .tile, .tile.compact { padding: 10px 12px; gap: 6px; }
+  .tile-head { padding-bottom: 1px; }
+  .tile-title { font-size: 12px; letter-spacing: 0; }
+  .hl-num, .tile.compact .hl-num { font-size: 34px; }
+  .summary { font-size: 11px; line-height: 1.4; }
+  .spark { height: 26px; }
+  .tile.compact .chips { display: none; }
+  .chips { padding-top: 2px; gap: 4px; }
+  .chip { padding: 2px 5px; }
+}
+@media(min-width:901px) and (max-height:820px) {
+  .app { padding: 11px 16px 9px; gap: 9px; }
+  .tile { padding: 9px 11px; gap: 5px; }
+  .hl-num, .tile.compact .hl-num { font-size: 30px; }
+  .hl-label, .delta { font-size: 9px; }
+  .tile[data-i='7'] .chips, .tile[data-i='8'] .chips { display: none; }
+  .spark { height: 23px; }
+}
+@media(max-width: 1200px) and (min-width: 901px) { .tile-title { font-size: 12px; letter-spacing: 0; } .legend { gap: 12px; } }
+@media(max-width: 900px) { .app { padding: 22px; height: auto; min-height: 0; } .canvas { grid-template-rows: none; grid-auto-rows: minmax(205px,auto); } header { gap: 16px; } header h1 { font-size: 29px; } .preview-meta { gap: 12px; } .legend { display: flex; gap: 12px; } .verdict { display: block; } .hl-num { font-size: 39px; } .sample-footer { gap: 12px; } }
+@media(max-width: 560px) { .app { padding: 19px 14px; } header { grid-template-columns: 1fr; gap: 15px; } header h1 { font-size: 30px; } .preview-meta { align-items: start; flex-direction: row; flex-wrap: wrap; gap: 12px 20px; }  .legend { padding-top: 4px; } .verdict { padding: 11px 13px; } .verdict::before { display: block; margin-bottom: 6px; } .canvas { grid-auto-rows: minmax(190px,auto); } .tile-title { font-size: 13px; } .tile { padding: 18px; } .tile.compact .summary { display: block; } .sample-footer { align-items: start; flex-direction: column; gap: 6px; } .d-head, .d-body { padding-left: 18px; padding-right: 18px; } .system-label { font-size: 9px; } }
+@media(prefers-reduced-motion:reduce) { *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; } }
+
+/* Near-black surfaces retain a faint blue cast; cyan carries the foreground. */
+:root {
+  --yearn-blue: #0657f9;
+  --neon: #43edff;
+  --good: var(--neon);
+  --bg: #020304;
+  --surface: #06080b;
+  --surface-2: #0b1018;
+  --line: color-mix(in srgb, var(--yearn-blue) 36%, #101c39);
+  --line-hi: var(--neon);
+  --text: var(--neon);
+  --muted: #93b3e0;
+  --dim: #688cbe;
+  --blue: var(--neon);
+  --blue-soft: #0657f924;
+  --cut: 12px;
+  --cut-shape: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
+}
+body {
+  background: radial-gradient(ellipse at 65% -20%, #38516e08, transparent 60%), var(--bg);
+}
+body::before {
+  background-image: radial-gradient(#4f627b20 .7px, transparent .8px);
+  background-size: 7px 7px;
+}
+.app { max-width: none; width: 100%; margin: 0; padding: 10px 8px 8px; gap: 10px; }
+header { grid-template-columns: minmax(0, 1fr) minmax(300px, 36%); gap: 18px; align-items: center; }
+.title-block { min-width: 0; display: flex; align-self: stretch; align-items: center; }
+.brandline { gap: 13px; margin-bottom: 0; }
+.brand-emblem { width: 127px; flex: none; line-height: 0; position: relative; }
+.yearn-logo { width: 100%; height: 37px; overflow: visible; filter: drop-shadow(0 0 5px #43edff35); }
+.brandline .brand-divider { color: #285a9e; }
+.brandline .system-label { color: #77a9ed; font: 10px 'Geist Mono', monospace; letter-spacing: .15em; }
+.preview-meta { gap: 9px; padding-top: 0; align-items: stretch; }
+.legend { justify-content: flex-end; gap: 18px; color: var(--muted); }
+.verdict {
+  grid-column: auto; padding: 11px 15px; display: flex; flex-direction: column;
+  gap: 5px; font-size: 11px; line-height: 1.5; color: #aac6eb;
+  border: 0; border-left: 2px solid var(--bad); clip-path: var(--cut-shape);
+  background: linear-gradient(100deg, #ff638f08, #38516e08), var(--surface);
+}
+.verdict::before { content: none; }
+.signal-label { display: flex; align-items: center; gap: 8px; color: var(--bad); font: 10px 'Geist Mono', monospace; letter-spacing: .12em; }
+.canvas { gap: 9px; }
+
+/* A clipped outer edge plus an inset face draws both diagonal corners cleanly. */
+.tile {
+  --edge: var(--line); --tile-fill: var(--surface); --cut: 12px;
+  border: 0; border-radius: 0; clip-path: var(--cut-shape); isolation: isolate;
+  padding: 14px; background: var(--edge); box-shadow: none;
+  --tile-lift: 0px;
+  transform: translateY(var(--tile-lift)); transition: transform 150ms ease-out, background-color 100ms, color 100ms;
+}
+.tile::after {
+  content: ''; position: absolute; inset: 1px; z-index: -1;
+  clip-path: var(--cut-shape); background: linear-gradient(130deg, #38516e08, transparent 65%), var(--tile-fill);
+  transition: background-color 100ms; pointer-events: none;
+}
+.tile::before { z-index: 1; box-shadow: none; }
+.tile.featured { --edge: #1b4b8b; --tile-fill: #080c12; background: var(--edge); }
+.tile:hover { --edge: var(--accent); --tile-fill: #0b111a; transform: translateY(var(--tile-lift)); background: var(--edge); box-shadow: none; }
+.tile.active { --edge: var(--accent); --tile-fill: color-mix(in srgb, var(--accent) 9%, var(--surface)); background: var(--edge); box-shadow: none; }
+.tile:active { --edge: var(--accent); --tile-fill: color-mix(in srgb, var(--accent) 22%, var(--surface)); transform: translateY(var(--tile-lift)); background: var(--edge); box-shadow: none; }
+.tile:hover { --tile-lift: -1px; }
+.tile:focus-visible { outline: none; --edge: var(--accent); --tile-fill: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
+.tile:focus-visible::before { width: 100%; }
+.tile-title { font-size: 13px; }
+.summary { color: #adc9ec; }
+.hl-label { color: var(--muted); }
+.chips { gap: 5px; }
+.chip { color: #94b5e7; background: #0657f90a; border-color: #1e4074; border-radius: 0; }
+.spark { filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 28%, transparent)); }
+.more { right: 15px; }
+.sample-footer {
+  display: flex; flex-direction: row; flex-wrap: wrap; justify-content: space-between;
+  align-items: center; gap: 8px 20px; color: #93b3e0; font-size: 12px; line-height: 1.5;
+}
+.snapshot-label { text-align: left; }
+.sample-footer .legend { display: flex; justify-content: flex-end; margin-left: auto; font: inherit; gap: 20px; }
+.sample-footer .legend span { gap: 8px; }
+.sample-footer .legend .dot { width: 10px; height: 10px; border-radius: 0; }
+
+.scrim { background: #020305b8; }
+.drawer {
+  --accent: var(--neon); --blue: var(--accent);
+  background: var(--bg); border-color: var(--accent); clip-path: none;
+  box-shadow: -16px 0 70px #000a;
+}
+.d-head { background: linear-gradient(110deg, color-mix(in srgb, var(--accent) 7%, transparent), #0657f908); border-color: color-mix(in srgb, var(--accent) 30%, var(--line)); padding-top: 24px; cursor: default; }
+.d-head h2, .kpi .v, .d-status .mono { color: var(--accent); }
+.d-sub, .d-status { color: var(--muted); }
+.close { transition: background-color 80ms, color 80ms; }
+.kpi, .chart { background-color: var(--surface); border-color: var(--line); border-radius: 0; }
+.kpi { background-image: radial-gradient(#0657f93a .7px, transparent .8px); }
+.section h3 { color: color-mix(in srgb, var(--accent) 65%, #b4d5ff); }
+.chart svg line { stroke: var(--line); }
+.chart .key i, .bar-fill { box-shadow: 0 0 9px color-mix(in srgb, var(--accent) 25%, transparent); }
+.bar-track { background: #0657f925; }
+.rule { background: var(--surface); border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); color: var(--muted); border-radius: 0; }
+.rule b { color: var(--accent); }
+.drawer :is(.kpi, .chart, .rule) {
+  --box-cut: 10px; --box-border: var(--line); --box-fill: var(--surface);
+  --box-shape: polygon(0 0, calc(100% - var(--box-cut)) 0, 100% var(--box-cut), 100% 100%, var(--box-cut) 100%, 0 calc(100% - var(--box-cut)));
+  position: relative; isolation: isolate; border: 0; border-radius: 0;
+  clip-path: var(--box-shape); background: var(--box-border);
+}
+.drawer :is(.kpi, .chart, .rule)::before {
+  content: ''; position: absolute; inset: 1px; z-index: -1;
+  background: var(--box-fill); clip-path: var(--box-shape); pointer-events: none;
+}
+.drawer .kpi::before { background-image: radial-gradient(#0657f93a .7px, transparent .8px); background-size: 5px 5px; }
+.drawer .rule { --box-border: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+.drawer .close { display: grid; place-items: center; width: 44px; height: 44px; padding: 10px; border: 0; border-radius: 0; background: transparent; color: var(--muted); clip-path: none; }
+.drawer .close svg { width: 22px; height: 22px; }
+.drawer .close:hover, .drawer .close:active, .drawer .close:focus-visible { background: transparent; color: var(--accent); transform: none; }
+.drawer .close:focus-visible { outline: 1px solid var(--accent); outline-offset: -5px; }
+table.t td, ul.ins li { color: #adc9ec; }
+.d-body { scrollbar-color: color-mix(in srgb, var(--accent) 45%, var(--surface)) var(--bg); scrollbar-width: thin; }
+
+@media(min-width:901px) and (max-height:820px) {
+  .app { padding: 8px 8px 6px; gap: 8px; }
+  .yearn-logo { height: 31px; }
+  .brand-emblem { width: 110px; }
+  .verdict { padding: 8px 12px; }
+  .tile, .tile.compact { padding: 10px 12px; }
+}
+@media(max-width:1200px) and (min-width:901px) {
+  header { grid-template-columns: minmax(0, 1fr) minmax(300px, 38%); gap: 12px; }
+  .tile-title { font-size: 12px; }
+}
+@media(max-width:900px) {
+  .app { padding: 12px 8px 10px; }
+  header { grid-template-columns: minmax(0, 1fr) minmax(260px, 40%); gap: 12px; }
+  .verdict { display: flex; }
+  .tile { padding: 16px; }
+}
+@media(max-width:650px) {
+  header { grid-template-columns: 1fr; gap: 12px; }
+  .preview-meta { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+  .legend { justify-content: flex-start; }
+  .verdict { padding: 10px 13px; }
+  .canvas { gap: 9px; }
+  .tile-title { font-size: 13px; }
+  .yearn-logo { height: 34px; }
+}
+@media(prefers-reduced-motion:reduce) { *, *::before, *::after { transition: none !important; } }
+
+:root {
+  --chart-orange: #ff9a3d;
+  --chart-violet: #9b7bff;
+  color-scheme: dark;
+}
+.tile { --accent: var(--good); }
+.tile:has(.dot.warn) { --accent: var(--warn); }
+.tile:has(.dot.bad) { --accent: var(--bad); }
+.dot.good { box-shadow: 0 0 9px color-mix(in srgb, var(--good) 50%, transparent); }
+.dot.warn { box-shadow: 0 0 9px color-mix(in srgb, var(--warn) 50%, transparent); }
+.dot.bad { box-shadow: 0 0 9px color-mix(in srgb, var(--bad) 50%, transparent); }
+
+/* Equal outside columns keep the control at the viewport's actual center. */
+.sample-footer { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); column-gap: 16px; }
+.sample-footer .legend { margin-left: 0; justify-self: end; }
+.theme-toggle {
+  justify-self: center; display: inline-flex; align-items: center; justify-content: center;
+  min-height: 30px; min-width: 86px; padding: 4px 8px; border: 0;
+  overflow: hidden; background: transparent; color: var(--muted); font: inherit;
+  letter-spacing: 0; cursor: pointer;
+}
+.theme-toggle:hover { color: var(--good); }
+.theme-toggle:active { background: var(--blue-soft); }
+.theme-toggle:focus-visible { outline: 2px solid var(--good); outline-offset: 1px; }
+#theme-toggle-inner { display: inline-flex; align-items: center; gap: 7px; }
+#theme-icon { display: inline-flex; }
+#theme-icon svg { width: 14px; height: 14px; }
+@keyframes theme-rise-in { from { transform: translateY(1.1em); } to { transform: translateY(0); } }
+.rise-in { animation: theme-rise-in 180ms cubic-bezier(.22,1,.36,1); }
+
+/* Light uses the same dot texture and panel geometry, with ink-like accents. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --neon: var(--yearn-blue);
+  --good: var(--yearn-blue);
+  --warn: #925000;
+  --bad: #bd2451;
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f3f7ff;
+  --line: #a4b8d7;
+  --line-hi: var(--yearn-blue);
+  --text: #163659;
+  --muted: #435b78;
+  --dim: #566d8a;
+  --blue: var(--yearn-blue);
+  --blue-soft: #0657f910;
+  --chart-orange: #985000;
+  --chart-violet: #6940c9;
+}
+:root[data-theme="light"] body { background: #fff; }
+:root[data-theme="light"] body::before { background-image: radial-gradient(#0657f92b .7px, transparent .8px); }
+:root[data-theme="light"] .yearn-logo { filter: none; }
+:root[data-theme="light"] .logo-core { fill: var(--yearn-blue); }
+:root[data-theme="light"] .logo-outline { stroke: #0657f9; opacity: .18; }
+:root[data-theme="light"] .brandline .brand-divider { color: #7391b9; }
+:root[data-theme="light"] .brandline .system-label { color: #365984; }
+:root[data-theme="light"] .verdict {
+  color: var(--muted); background: linear-gradient(100deg, #bd245108, #0657f905), #fff;
+}
+:root[data-theme="light"] .tile { --edge: var(--line); --tile-fill: #fff; }
+:root[data-theme="light"] .tile::after { background: linear-gradient(130deg, #0657f903, transparent 65%), var(--tile-fill); }
+:root[data-theme="light"] .tile.featured { --edge: #789cd5; --tile-fill: #f8faff; }
+:root[data-theme="light"] .tile:hover { --edge: var(--accent); --tile-fill: #f0f5ff; }
+:root[data-theme="light"] .tile.active { --edge: var(--accent); --tile-fill: color-mix(in srgb, var(--accent) 5%, white); }
+:root[data-theme="light"] .tile:active { --edge: var(--accent); --tile-fill: color-mix(in srgb, var(--accent) 12%, white); }
+:root[data-theme="light"] .tile:focus-visible { --edge: var(--accent); --tile-fill: #edf3ff; }
+:root[data-theme="light"] :is(.tile-title, .hl-num) { text-shadow: none; }
+:root[data-theme="light"] .summary { color: #294663; }
+:root[data-theme="light"] .chip { color: #3d587b; background: #0657f905; border-color: #b1c5e3; }
+:root[data-theme="light"] .dot { box-shadow: none; }
+:root[data-theme="light"] .spark { filter: none; }
+:root[data-theme="light"] .spark stop:first-child { stop-opacity: .14; }
+:root[data-theme="light"] .sample-footer { color: var(--muted); }
+:root[data-theme="light"] .scrim { background: #06142c45; }
+:root[data-theme="light"] .drawer { box-shadow: -16px 0 70px #1439771c; }
+:root[data-theme="light"] .section h3 { color: var(--accent); }
+:root[data-theme="light"] .drawer .kpi::before { background-image: radial-gradient(#0657f91b .7px, transparent .8px); }
+:root[data-theme="light"] .bar-track { background: #0657f914; }
+:root[data-theme="light"] :is(.chart .key i, .bar-fill) { box-shadow: none; }
+:root[data-theme="light"] :is(table.t td, ul.ins li) { color: #294663; }
+
+@media(max-width:700px) {
+  .sample-footer { grid-template-columns: 1fr; row-gap: 8px; }
+  .snapshot-label { grid-row: 1; }
+  .sample-footer .legend { grid-row: 2; }
+  .theme-toggle { grid-row: 3; }
+}
+@media(prefers-reduced-motion:reduce) { .rise-in { animation: none; } }
+
+/* One interaction language for the canvas, site chrome and directory. */
+.hover-panel {
+  --accent: var(--good); --panel-fill: var(--surface); --panel-edge: var(--line);
+  --panel-lift: 0px; --cut: 10px;
+  position: relative; isolation: isolate; border: 0; border-radius: 0;
+  clip-path: var(--cut-shape); background: var(--panel-edge); color: var(--accent);
+  transform: translateY(var(--panel-lift));
+  transition: transform 150ms ease-out, background-color 100ms, color 100ms;
+  text-decoration: none; cursor: pointer;
+}
+.hover-panel::before {
+  content: ''; position: absolute; inset: 1px; z-index: -1; pointer-events: none;
+  clip-path: var(--cut-shape); background: var(--panel-fill); transition: background-color 100ms;
+}
+.hover-panel:hover, .hover-panel:focus-visible {
+  --panel-edge: var(--accent); --panel-fill: color-mix(in srgb, var(--accent) 6%, var(--surface));
+  --panel-lift: -1px;
+}
+.hover-panel:focus-visible { outline: none; }
+.hover-panel:focus-visible::after {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--accent);
+}
+.hover-panel:active { --panel-fill: color-mix(in srgb, var(--accent) 17%, var(--surface)); }
+.brandline { gap: 10px; }
+.brandline .brand-divider { visibility: hidden; }
+.brand-emblem.hover-panel { --panel-fill: var(--surface-2); width: 148px; min-height: 56px; padding: 14px 22px; display: flex; align-items: center; justify-content: center; }
+.brand-emblem .yearn-logo { width: 104px; height: 28px; }
+.brand-emblem.hover-panel:hover, .brand-emblem.hover-panel:focus-visible { --panel-fill: color-mix(in srgb, var(--good) 8%, var(--surface-2)); }
+.brand-emblem.hover-panel:active { --panel-fill: color-mix(in srgb, var(--good) 17%, var(--surface-2)); }
+.brandline .system-label { display: flex; color: var(--good); font-size: 14px; white-space: nowrap; }
+.app-name { align-items: center; padding: 0 3px; }
+.footer-shell { flex: none; min-width: 0; }
+.sample-footer.theme-toggle {
+  width: 100%; display: grid; min-height: 42px; padding: 5px 12px;
+  text-align: left; color: var(--muted); font: 12px/1.5 'Geist Mono', monospace;
+  letter-spacing: .04em; overflow: visible;
+}
+.sample-footer.theme-toggle:hover { color: var(--good); }
+.sample-footer #theme-toggle-inner { justify-self: center; overflow: hidden; padding: 4px 2px; }
+.sample-footer #theme-toggle-inner > span { display: inline-flex; }
+.sample-footer .legend { white-space: nowrap; }
+
+.site-menu {
+  inset: 0; width: 100%; max-width: none; height: 100dvh; max-height: none; margin: 0;
+  border: 0; padding: 0; background: var(--bg); color: var(--text); overflow: hidden;
+  background-image: radial-gradient(#4f627b20 .7px, transparent .8px); background-size: 7px 7px;
+}
+.site-menu::backdrop { background: var(--bg); }
+.site-menu[open] .menu-shell { animation: menu-enter 180ms cubic-bezier(.22,1,.36,1); }
+@keyframes menu-enter { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: translateY(0); } }
+.menu-shell {
+  position: relative; z-index: 1; isolation: isolate; overflow: hidden; height: 100%; display: flex; flex-direction: column; gap: 22px; padding: 24px;
+}
+.menu-close {
+  position: absolute; top: 20px; right: 20px; display: grid; place-items: center;
+  width: 44px; height: 44px; padding: 10px; border: 0; background: transparent;
+  color: var(--muted); cursor: pointer; z-index: 2;
+}
+.menu-close:hover, .menu-close:focus-visible { color: var(--good); }
+.menu-close:focus-visible { outline: 1px solid var(--good); outline-offset: -5px; }
+.menu-close svg { width: 22px; height: 22px; }
+.menu-filterbar { display: flex; align-items: center; padding-right: 56px; min-height: 40px; flex: none; }
+.menu-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.menu-filter { padding: 10px 14px; color: var(--muted); font: 12px 'Geist Mono', monospace; }
+.menu-filter:hover, .menu-filter:focus-visible, .menu-filter[aria-pressed="true"] { color: var(--good); }
+.menu-filter[aria-pressed="true"] { --panel-edge: var(--good); }
+.menu-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 2px 1px 10px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.site-menu > .menu-watermark { position: fixed; right: 0; bottom: 0; z-index: 0; display: block; width: min(119vw, 102dvh); height: auto; max-width: none; max-height: none; margin: 0; transform: translate(30%, 30%); fill: var(--good); opacity: .06; pointer-events: none; user-select: none; }
+.menu-filterbar, .menu-scroll { position: relative; z-index: 1; }
+:root[data-theme="light"] .site-menu > .menu-watermark { opacity: .045; }
+.menu-groups { display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); gap: 14px; align-items: start; }
+.menu-group { min-width: 0; }
+.menu-group[hidden], .menu-card[hidden] { display: none; }
+.menu-group-head { display: flex; flex-direction: column; gap: 6px; padding: 0 3px 15px; }
+.menu-group-head h3 { font: 500 27px/1.1 'Chakra Petch', sans-serif; color: var(--good); }
+.menu-group-head p { font-size: 11px; color: var(--muted); min-height: 28px; line-height: 1.4; }
+.menu-links { display: grid; gap: 8px; }
+.menu-card { display: flex; flex-direction: column; justify-content: center; gap: 6px; min-height: 74px; padding: 12px; }
+.menu-card-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; font: 500 13px/1.3 'Geist Mono', monospace; }
+.menu-card-title svg { width: 12px; height: 12px; flex: none; opacity: 0; margin-top: 2px; transform: translate(0, 0); transition: opacity 100ms ease-out, transform 140ms ease-out; }
+.menu-card:hover .menu-card-title svg, .menu-card:focus-visible .menu-card-title svg { opacity: 1; transform: translate(2px, -2px); }
+@media(prefers-reduced-motion:reduce) { .menu-card .menu-card-title svg, .menu-card:hover .menu-card-title svg, .menu-card:focus-visible .menu-card-title svg { transform: none; } }
+.menu-card-description { font: 11px/1.5 Geist, sans-serif; color: var(--muted); text-align: left; }
+.menu-card[aria-current="page"] { --panel-edge: var(--good); --panel-fill: color-mix(in srgb, var(--good) 9%, var(--surface)); }
+.menu-card[aria-current="page"] .menu-card-description { color: var(--good); }
+.menu-groups.is-filtered { grid-template-columns: 1fr; }
+.menu-groups.is-filtered .menu-links { grid-template-columns: repeat(3,minmax(0,1fr)); }
+.menu-groups.is-filtered .menu-group-head p { min-height: 0; }
+.menu-groups.is-filtered .menu-card { min-height: 105px; padding: 22px; }
+.menu-groups.is-filtered .menu-card-title { font-size: 17px; }
+.menu-groups.is-filtered .menu-card-description { font-size: 13px; }
+:root[data-theme="light"] .site-menu { background-image: radial-gradient(#0657f92b .7px, transparent .8px); }
+:root[data-theme="light"] .brandline .system-label { color: var(--good); }
+@media(min-width:901px) and (max-height:820px) {
+  .brand-emblem.hover-panel { width: 130px; min-height: 49px; padding: 12px 20px; }
+  .brand-emblem .yearn-logo { width: 90px; height: 25px; }
+  .menu-shell { padding: 16px; gap: 16px; }
+  .menu-close { top: 12px; right: 12px; }
+  .menu-card { min-height: 73px; padding: 10px; }
+  .menu-group-head { padding-bottom: 10px; }
+}
+@media(max-width:1240px) { .menu-groups { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 25px 14px; } }
+@media(max-width:900px) {
+  .brandline { gap: 6px; }
+  .brand-emblem.hover-panel { width: 130px; min-height: 52px; padding: 13px 20px; }
+  .brand-emblem .yearn-logo { width: 90px; height: 26px; }
+  .menu-shell { padding: 18px 12px; gap: 16px; }
+  .menu-close { top: 14px; right: 8px; }
+  .menu-groups, .menu-groups.is-filtered .menu-links { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .menu-filterbar { align-items: flex-start; }
+}
+@media(max-width:700px) {
+  .sample-footer.theme-toggle { row-gap: 5px; padding: 10px 12px; }
+  .sample-footer #theme-toggle-inner { grid-row: 3; }
+}
+@media(max-width:480px) {
+  .brandline .system-label { font-size: 13px; }
+  .menu-groups, .menu-groups.is-filtered .menu-links { grid-template-columns: 1fr; }
+  .menu-group-head p { min-height: 0; }
+  .menu-card { min-height: 74px; padding: 15px; }
+  .menu-card-title { font-size: 14px; }
+  .menu-card-description { font-size: 12px; }
+}
+@media(prefers-reduced-motion:reduce) { .site-menu[open] .menu-shell { animation: none; } }
+
+
+/* Reuse the standard cut-corner panel and its hover/focus/press states. */
+.metrics-tabs .metrics-tab { --accent: inherit; color: var(--muted); }
+.metrics-tabs .metrics-tab[aria-selected="true"] {
+  --panel-edge: var(--accent);
+  --panel-fill: color-mix(in srgb,var(--accent) 8%,var(--surface));
+  color: var(--accent);
+}
+.metrics-tabs .metrics-tab:hover, .metrics-tabs .metrics-tab:focus-visible { color: var(--accent); }
+/* Read-only metric cards retain the drawer's cut corners without interaction effects. */
+.metrics-tabs { gap: 12px; margin-bottom: 28px; }
+#metrics-group-content { display: flex; flex-direction: column; gap: 24px; }
+#metrics-group-content > * { margin: 0; }
+#metrics-group-content .metrics-kpis { gap: 14px; }
+#metrics-group-content .section h3 { margin-bottom: 12px; line-height: 1.6; }
+
+
+/* Tags echo the cards' angled edges with smaller cuts. */
+.tile .chip {
+  --tag-cut: 5px; --tag-edge: #1e4074;
+  --tag-fill: color-mix(in srgb,var(--yearn-blue) 4%,var(--tile-fill));
+  position: relative; isolation: isolate; border: 0; border-radius: 0;
+  padding: 4px 7px; background: var(--tag-edge);
+  clip-path: polygon(0 0,calc(100% - var(--tag-cut)) 0,100% var(--tag-cut),100% 100%,var(--tag-cut) 100%,0 calc(100% - var(--tag-cut)));
+}
+.tile .chip::before {
+  content: ''; position: absolute; inset: 1px; z-index: -1; pointer-events: none;
+  background: var(--tag-fill);
+  clip-path: polygon(0 0,calc(100% - 4px) 0,100% 4px,100% 100%,4px 100%,0 calc(100% - 4px));
+}
+:root[data-theme="light"] .tile .chip { --tag-edge: #b1c5e3; }
+@media(min-width:901px) and (max-height:820px) { .tile .chip { padding: 3px 6px; } }
+</style>
+
+
+
+
+
+</head>
+<body>
+<div class="app">
+  <header>
+  <div class="title-block">
+    <div class="brandline"><button type="button" class="brand-emblem hover-panel" data-menu-open aria-label="Open Yearn navigation" aria-haspopup="dialog" aria-controls="site-menu" aria-expanded="false"><svg xmlns="http://www.w3.org/2000/svg" viewBox="-12 -8 956 274" role="img" aria-label="Yearn" class="yearn-logo">
+<defs>
+  <g id="yearn-mark"><g>
+	<path d="M876.8,41.1c-9.3,0-17.1,1.5-23.4,4.6c-6.3,3.1-11.7,7.4-16.2,12.8l-3.2-16h-30.7v128.2h35.2v-65.6
+		c0-11.1,2.5-19.8,7.5-25.9c5-6.1,12.1-9.2,21.2-9.2c17.3,0,25.9,11.1,25.9,33.2v67.6h35.2v-69.6c0-21.4-4.8-36.8-14.5-46.1
+		C904.1,45.8,891.7,41.1,876.8,41.1 M783.6,42.6c-9.5,0-17,1.6-22.7,4.9c-5.7,3.2-10.4,8-14.2,14.3l-3.2-19.2h-31.9v128.2h35.2V108
+		c0-10.3,2.3-18.5,7-24.4c4.7-6,12-9,21.9-9h14V42.6H783.6z M630.8,146.9c-5.8,0-10.4-1.3-13.8-4c-3.4-2.7-5.1-6.2-5.1-10.7
+		c0-5.3,2-9.4,6.1-12.3c4.1-2.9,9.8-4.4,17.1-4.4h25.7v2.5c-0.2,8.8-2.9,15.8-8.2,21.1C647.2,144.3,640,146.9,630.8,146.9
+		 M638.6,41.1c-17.3,0-31.2,3.6-41.6,10.8c-10.5,7.2-16.3,17.4-17.5,30.5h33.9c0.8-4.8,3.4-8.6,7.6-11.5c4.2-2.8,9.7-4.2,16.3-4.2
+		c7.1,0,12.8,1.7,17.1,5c4.2,3.3,6.4,7.9,6.4,13.7V92h-25.2c-19.3,0-34,3.7-44,11c-10.1,7.3-15.1,17.8-15.1,31.4
+		c0,12,4.2,21.3,12.6,27.9c8.4,6.7,19.7,10,33.8,10c8.6,0,16.1-1.5,22.3-4.5c6.2-3,11.8-7.4,16.6-13.2l2.7,16.2h30.9V87.5
+		c0-15.1-4.9-26.6-14.8-34.5C670.7,45.1,656.7,41.1,638.6,41.1 M472,91.8c1-7.5,4.1-13.4,9.4-17.8c5.2-4.4,11.7-6.6,19.3-6.6
+		c8,0,14.6,2.1,19.8,6.4c5.2,4.2,8.4,10.3,9.6,18.1H472z M434.6,107c0,13.1,2.8,24.6,8.4,34.5c5.6,9.9,13.5,17.5,23.9,22.8
+		c10.4,5.3,22.7,8,37,8c11,0,20.7-2,29.2-5.9c8.5-3.9,15.3-9.3,20.4-16.1c5.2-6.8,8.4-14.5,9.7-22.9h-34.7c-1.5,6-4.6,10.5-9.4,13.6
+		c-4.7,3.1-10.7,4.6-17.8,4.6c-9,0-16-2.7-21.2-8c-5.2-5.3-8.1-12.6-9-21.9v-1h93c0.7-3.5,1-7.5,1-12c-0.2-12.5-3-23.3-8.6-32.5
+		c-5.6-9.2-13.3-16.4-23.2-21.4c-9.9-5.1-21.3-7.6-34.3-7.6c-12.8,0-24.1,2.7-33.8,8.1c-9.7,5.4-17.3,13.1-22.7,22.9
+		C437.3,82.1,434.6,93.7,434.6,107 M300.2,42.6l49.4,128.9l-3.2,8.5c-1.8,4.3-3.7,7.2-5.7,8.7c-2,1.5-5.2,2.2-9.7,2.2h-19.5v29.7
+		h34.2c6.5,0,11.8-1.1,15.8-3.4c4.1-2.2,7.4-5.6,10.1-10c2.7-4.4,5.5-10.5,8.5-18.3l56.9-146.4h-37.7l-30.4,92l-31.2-92H300.2z"/>
+</g>
+<g>
+	<path d="M201.9,98.5l-32.4,32.4c1.8,5.9,2.7,12.2,2.7,18.5c0,17.1-6.7,33.2-18.7,45.3c-12.1,12.1-28.2,18.7-45.3,18.7
+		s-33.2-6.7-45.3-18.7c-12.1-12.1-18.7-28.2-18.7-45.3c0-6.4,0.9-12.6,2.7-18.5L14.4,98.5c-8.2,15.1-12.9,32.5-12.9,51
+		c0,58.9,47.8,106.7,106.7,106.7s106.7-47.8,106.7-106.7C214.9,131,210.2,113.6,201.9,98.5z"/>
+	<polygon points="86.8,170.7 129.5,170.7 129.5,102.9 202.2,30.2 172,0 108.2,63.8 44.4,0 14.2,30.2 86.8,102.8 	"/>
+</g>
+</g>
+</defs>
+<use class="logo-outline" href="#yearn-mark" fill="none" stroke="#0657f9" stroke-width="12" opacity=".8" transform="translate(4 2)"/>
+<use class="logo-core" href="#yearn-mark" fill="#43edff"/>
+</svg></button><span class="brand-divider" aria-hidden="true">/</span><h1 class="system-label app-name">PROTOCOL HEALTH</h1></div>
+  </div>
+  <div class="preview-meta">
+    <div class="verdict">@@VERDICT@@</div>
+  </div>
+</header>
+  <main class="canvas" id="canvas"></main>
+<footer class="footer-shell">
+ <button id="theme-text-toggle" class="sample-footer theme-toggle hover-panel" type="button" aria-label="Theme: device. Switch to light." title="Theme: device. Switch to light.">
+  <span class="snapshot-label">SNAPSHOT · @@DATE@@</span>
+  <span id="theme-toggle-inner"><span id="theme-icon" aria-hidden="true"></span></span>
+  <span class="legend" aria-label="Health signal legend"><span><i class="dot good" aria-hidden="true"></i>Healthy</span><span><i class="dot warn" aria-hidden="true"></i>Watch</span><span><i class="dot bad" aria-hidden="true"></i>At risk</span></span>
+ </button>
+</footer>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" inert aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="d-title">
+  <div class="d-head">
+    <div>
+      <h2 id="d-title"></h2>
+      <div class="d-sub" id="d-sub"></div>
+      <div class="d-status" id="d-status"></div>
+    </div>
+    <button type="button" class="close" id="close" aria-label="Close details"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 4 12 12M16 4 4 16"/></svg></button>
+  </div>
+  <div class="d-body" id="d-body"></div>
+</aside>
+
+<script>
+const ICONS = {
+  link: '<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>',
+  cog: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>',
+  box: '<path d="M21 16V8l-9-5-9 5v8l9 5 9-5z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/>',
+  gift: '<path d="M12 2l3 7h7l-5.5 4.5 2 7.5L12 16.5 5.5 21l2-7.5L2 9h7z"/>',
+  pulse: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+  send: '<path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/>',
+  users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
+  minus: '<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+  plus: '<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>'
+};
+
+const REPORT = @@REPORT@@;
+const M12 = REPORT.labels;
+const PANELS = REPORT.panels;
+const HEALTH_LABEL = { good: 'Healthy', warn: 'Watch', bad: 'At risk', pending: 'Pending' };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const svgIcon = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[k]}</svg>`;
+
+function linePath(data, w, h, pad, min, max) {
+  const r = max - min || 1;
+  let d = '', pen = false;
+  data.forEach((v, i) => {
+    if (v == null) { pen = false; return; }
+    const x = (i / (data.length - 1)) * w, y = pad + (1 - (v - min) / r) * (h - pad * 2);
+    d += `${pen ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)} `; pen = true;
+  });
+  return d.trim();
+}
+function sparkSvg(data, h, id) {
+  if (!data.some(v=>v!=null)) return '';
+  const w = 300, vals = data.filter(v => v != null), min = Math.min(...vals), max = Math.max(...vals);
+  const line = linePath(data, w, h, 4, min, max);
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+    <defs><linearGradient id="g${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0657f9" stop-opacity=".35"/><stop offset="1" stop-color="#0657f9" stop-opacity="0"/></linearGradient></defs>
+    <path d="${line} L${w},${h} L0,${h} Z" fill="url(#g${id})"/>
+    <path d="${line}" fill="none" stroke="#3d7bff" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`;
+}
+function cardChartHtml(c, i) {
+  const title=`<div class="card-chart-title">${esc(c.title)}</div>`;
+  if(c.kind==='trend')return `<div class="card-chart" role="img" aria-label="${esc(c.title+'; '+c.period)}">${title}<div class="spark">${sparkSvg(c.values, 48, 'card'+i)}</div><div class="card-chart-period">${esc(c.period)}</div></div>`;
+  if(c.kind==='share'){const share=Math.max(0,Math.min(1,c.share));return `<div class="card-chart" role="img" aria-label="${esc(c.title+'; '+c.left+'; '+c.right)}">${title}<div class="card-share"><span style="width:${share*100}%"></span></div><div class="card-chart-labels"><span>${esc(c.left)}</span><span>${esc(c.right)}</span></div></div>`;}
+  return `<div class="card-chart" role="img" aria-label="${esc(c.title+'; '+c.labels.join(', '))}">${title}<div class="card-categories">${c.labels.map(label=>`<div><span class="card-category-mark"></span><span>${esc(label)}</span></div>`).join('')}</div></div>`;
+}
+function chartSeriesColor(series, index) {
+  if (index === 0) return 'var(--accent)';
+  if (series.color === '#ff9a3d') return 'var(--chart-orange)';
+  if (series.color === '#9b7bff') return 'var(--chart-violet)';
+  return series.color || 'var(--muted)';
+}
+function chartHtml(c) {
+  const w = 600, h = 150, all = c.series.flatMap(s => s.data).filter(v => v != null);
+  if (!all.length) return `<div class="section"><h3>${esc(c.title)}</h3><p>Unavailable — see coverage notes.</p></div>`;
+  const max = Math.max(...all), min = Math.min(0, Math.min(...all)), fmt = v => c.unit === '%' ? v.toFixed(2)+'%' : c.unit === 'USD' ? '$'+v.toLocaleString(undefined,{maximumFractionDigits:0}) : Number(v.toPrecision(4)).toLocaleString();
+  const grid = [0.25, 0.5, 0.75].map(f => `<line x1="0" x2="${w}" y1="${(h * f).toFixed(1)}" y2="${(h * f).toFixed(1)}" stroke="#1c2340" stroke-width="1" vector-effect="non-scaling-stroke"/>`).join('');
+  const lines = c.series.map((s, index) => {
+    const col = chartSeriesColor(s, index);
+    const pts = s.data.map((v, i) => v == null ? '' : `<circle cx="${((i / (s.data.length - 1)) * w).toFixed(1)}" cy="${(4 + (1 - (v - min) / (max - min || 1)) * (h - 8)).toFixed(1)}" r="2.5" fill="${col}"><title>${esc(c.labels[i])}: ${esc(fmt(v))}</title></circle>`).join('');
+    return `<path d="${linePath(s.data, w, h, 4, min, max)}" fill="none" stroke="${col}" stroke-width="2" vector-effect="non-scaling-stroke"/>${pts}`;
+  }).join('');
+  const key = c.series.length > 1 ? `<div class="key">${c.series.map((s, index) => `<span><i style="background:${chartSeriesColor(s, index)}"></i>${esc(s.name)}</span>`).join('')}</div>` : '';
+  return `<div class="section"><h3>${esc(c.title)}</h3><div class="chart">${key}<div class="range"><span>max ${esc(fmt(max))}</span><span>${min === 0 ? '0' : 'min ' + esc(fmt(min))}</span></div>
+    <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${grid}${lines}</svg>
+    <div class="axis"><span>${esc(c.labels[0])}</span><span>${esc(c.labels[Math.floor(c.labels.length / 2)])}</span><span>${esc(c.labels[c.labels.length - 1])}</span></div></div></div>`;
+}
+function barsHtml(b) {
+  if(!b.rows.length) return '';
+  const max = Math.max(...b.rows.map(r => r[1]));
+  const show = v => b.unit === '$k' ? '$' + v + 'k' : b.unit === '$M' ? '$' + v.toFixed(2) + 'M' : v + '%';
+  const width = v => b.unit ? (v / max) * 100 : v;
+  return `<div class="section"><h3>${esc(b.title)}</h3><div class="bars">${b.rows.map(([n, v]) => `<div class="bar-row"><span title="${esc(n)}">${esc(n)}</span><div class="bar-track"><div class="bar-fill" style="width:${width(v)}%"></div></div><span class="pct mono">${esc(show(v))}</span></div>`).join('')}</div></div>`;
+}
+function tableHtml(t) {
+  const isNum = s => /^[\s$+−\-…]*[\d.,]+[%kM×]?/.test(s) || s === '—' || s === '…';
+  return `<div class="section"><h3>${esc(t.title)}</h3><table class="t"><thead><tr>${t.head.map((h, i) => `<th class="${i && t.rows.every(r => isNum(r[i] || '')) ? 'n' : ''}">${esc(h)}</th>`).join('')}</tr></thead>
+    <tbody>${t.rows.map(r => `<tr>${r.map((c, i) => `<td class="${i && t.rows.every(rr => isNum(rr[i] || '')) ? 'n' : ''}">${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+
+
+const METRIC_GROUPS = ['Yearn health', 'Capital efficiency', 'Macro', 'DeFi context'];
+function metricGroupContent(index,d,p) {
+ const g=REPORT.metricGroups[index];
+ return `<h3 class="metrics-heading">${esc(g.title)}</h3>` +
+   g.charts.map(chartHtml).join('') +
+   g.notes.map(n=>`<p class="metrics-note">${esc(n)}</p>`).join('') +
+   g.tables.map(tableHtml).join('');
+}
+function keyMetricsHtml(d,p) {
+ return `<div class="metrics-tabs" role="tablist" aria-label="Metric groups">${METRIC_GROUPS.map((name,i)=>`<button class="metrics-tab hover-panel" type="button" role="tab" id="metrics-tab-${i}" aria-controls="metrics-group-content" aria-selected="${i===0}" data-metric-group="${i}">${String(i+1).padStart(2,'0')} / ${esc(name)}</button>`).join('')}</div><div id="metrics-group-content" role="tabpanel" aria-labelledby="metrics-tab-0">${metricGroupContent(0,d,p)}</div>`;
+}
+function wireMetricGroups(d,p) {
+ const tabs=[...document.querySelectorAll('[data-metric-group]')];
+ function select(i,focus=false) {
+  tabs.forEach((t,j)=>{t.setAttribute('aria-selected',String(i===j));t.tabIndex=i===j?0:-1});
+  const content=document.getElementById('metrics-group-content');
+  content.setAttribute('aria-labelledby','metrics-tab-'+i);content.innerHTML=metricGroupContent(i,d,p);
+  if(focus) tabs[i].focus();
+ }
+ tabs.forEach((t,i)=>{
+  t.addEventListener('click',()=>select(i));
+  t.addEventListener('keydown',e=>{
+   let j=e.key==='ArrowRight'?(i+1)%tabs.length:e.key==='ArrowLeft'?(i+tabs.length-1)%tabs.length:e.key==='Home'?0:e.key==='End'?tabs.length-1:null;
+   if(j!==null){e.preventDefault();e.stopPropagation();select(j,true)}
+  });
+ });select(0);
+}
+const canvas = document.getElementById('canvas');
+canvas.innerHTML = PANELS.map((p, i) => `
+  <button class="tile${p.featured ? ' featured' : ''}${p.compact ? ' compact' : ''}" style="grid-area:${p.area}" data-i="${i}" aria-label="${esc(p.title)}: open details">
+    <div class="tile-head"><span class="ico">${svgIcon(p.icon)}</span><span class="tile-title">${esc(p.title)}</span><span class="dot ${p.health}" title="${HEALTH_LABEL[p.health]}"></span></div>
+    <div class="hl"><span class="hl-num mono">${esc(p.hl)}</span><span class="hl-label">${esc(p.hlLabel)}</span><span class="delta ${p.delta[1]}">${esc(p.delta[0])}</span></div>
+    <div class="summary">${esc(p.summary)}</div>
+    ${p.cardChart ? cardChartHtml(p.cardChart, i) : p.spark ? `<div class="spark">${sparkSvg(p.spark, 34, 't' + i)}</div>` : ''}
+    ${p.chips?.length ? `<div class="chips">${p.chips.map(c => `<span class="chip">${esc(c)}</span>`).join('')}</div>` : ''}
+  </button>`).join('');
+
+const drawer = document.getElementById('drawer'), scrim = document.getElementById('scrim');
+let current = -1, lastFocus = null;
+function syncDrawerAccent() {
+  if (current < 0) return;
+  const selectedCard = canvas.querySelector(`[data-i="${current}"]`);
+  drawer.style.setProperty('--accent', getComputedStyle(selectedCard).getPropertyValue('--accent').trim());
+}
+function open(i) {
+  current = (i + PANELS.length) % PANELS.length;
+  const p = PANELS[current], d = p.detail;
+  syncDrawerAccent();
+  drawer.dataset.health = p.health;
+  document.getElementById('d-title').textContent = p.title;
+  document.getElementById('d-sub').textContent = d.sub;
+  document.getElementById('d-status').innerHTML = `<i class="dot ${p.health}"></i>${HEALTH_LABEL[p.health]} · <span class="mono">${esc(p.hl)}</span> ${esc(p.hlLabel)}`;
+  const list = (t, items, cls) => items && items.length ? `<div class="section"><h3>${t}</h3><ul class="ins ${cls}">${items.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : '';
+  document.getElementById('d-body').innerHTML = p.id === 'km' ? keyMetricsHtml(d,p) : `
+    <div class="kpis">${d.kpis.map(([v, l]) => `<div class="kpi"><div class="v mono">${esc(v)}</div><div class="l">${esc(l)}</div></div>`).join('')}</div>
+    <div class="rule"><b>Health rule.</b> ${esc(p.rule)}</div>
+    ${d.chart ? chartHtml(d.chart) : ''}
+    ${d.chart2 ? chartHtml(d.chart2) : ''}
+    ${d.table ? tableHtml(d.table) : ''}
+    ${d.table2 ? tableHtml(d.table2) : ''}
+    ${(d.bars || []).map(barsHtml).join('')}
+    ${list('Insights', d.insights, '')}
+    ${list('Watch', d.watch, 'watch')}
+    ${list('Risks', d.risks, 'risk')}
+    <div class="section"><h3>Sources</h3><div class="src">${Array.isArray(d.sources)?d.sources.filter(s=>/^https:\/\//.test(s.url)).map(s=>`<a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.title)}</a>`).join(" · "):esc(d.sources)}</div></div>`;
+  if (p.id === 'km') wireMetricGroups(d,p);
+  document.getElementById('d-body').scrollTop = 0;
+  document.querySelectorAll('.tile').forEach((t, j) => t.classList.toggle('active', j === current));
+  if (!drawer.classList.contains('open')) lastFocus = document.activeElement;
+  drawer.inert = false; drawer.setAttribute('aria-hidden', 'false');
+  drawer.classList.add('open'); scrim.classList.add('open');
+  document.getElementById('close').focus();
+}
+function close() {
+  drawer.classList.remove('open'); scrim.classList.remove('open');
+  drawer.inert = true; drawer.setAttribute('aria-hidden', 'true');
+  document.querySelectorAll('.tile').forEach(t => t.classList.remove('active'));
+  current = -1;
+  if (lastFocus) lastFocus.focus();
+}
+canvas.addEventListener('click', e => { const t = e.target.closest('.tile'); if (t) open(+t.dataset.i); });
+scrim.addEventListener('click', close);
+document.querySelector('.d-head').addEventListener('click', close);
+document.addEventListener('keydown', e => {
+  if (current < 0) return;
+  if (e.key === 'Escape') close();
+  if (e.key === 'ArrowRight') open(current + 1);
+  if (e.key === 'ArrowLeft') open(current - 1);
+});
+</script>
+<dialog id="site-menu" class="site-menu" aria-label="Yearn navigation">
+ <svg class="menu-watermark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 306.8 359.68" aria-hidden="true" focusable="false"><path d="M288.19,138.27l-46.65,45.56c2.56,8.33,3.89,17.07,3.89,26.01,0,24.01-9.57,46.59-26.96,63.57-17.38,16.98-40.5,26.33-65.08,26.33s-47.7-9.35-65.08-26.33c-17.38-16.98-26.96-39.55-26.96-63.57,0-8.94,1.33-17.68,3.89-26.01l-46.65-45.56C6.74,159.54,0,183.93,0,209.85c0,82.75,68.68,149.83,153.4,149.83s153.4-67.08,153.4-149.83c0-25.92-6.74-50.31-18.6-71.57Z"/><polygon points="122.72 239.82 184.08 239.82 184.08 144.46 288.53 42.4 245.13 .02 153.43 89.63 61.66 0 18.27 42.38 122.72 144.4 122.72 239.82"/></svg>
+ <div class="menu-shell">
+  <button id="menu-close" type="button" class="menu-close" data-menu-close aria-label="Close navigation"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 4 12 12M16 4 4 16"/></svg></button>
+  <div class="menu-filterbar"><div class="menu-filters" role="group" aria-label="Filter by purpose"><button type="button" class="menu-filter hover-panel" data-menu-filter="earn" aria-pressed="false">Earn</button><button type="button" class="menu-filter hover-panel" data-menu-filter="govern" aria-pressed="false">Govern</button><button type="button" class="menu-filter hover-panel" data-menu-filter="build" aria-pressed="false">Build</button><button type="button" class="menu-filter hover-panel" data-menu-filter="monitor" aria-pressed="true">Monitor</button><button type="button" class="menu-filter hover-panel" data-menu-filter="learn" aria-pressed="false">Learn</button><button type="button" class="menu-filter hover-panel" data-menu-filter="connect" aria-pressed="false">Connect</button><button type="button" class="menu-filter hover-panel" data-menu-filter="all" aria-pressed="false">All</button></div></div>
+  <nav class="menu-scroll" aria-label="Yearn apps and resources"><div id="menu-groups" class="menu-groups"><section class="menu-group" data-group="earn" aria-labelledby="menu-group-earn"><div class="menu-group-head"><h3 id="menu-group-earn">Earn</h3><p>Put your assets to work</p></div><div class="menu-links"><a class="menu-card hover-panel" data-search="earn vaults find an automated yield strategy https://yearn.fi/vaults" href="https://yearn.fi/vaults" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">Vaults<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Find an automated yield strategy</span></a><a class="menu-card hover-panel" data-search="earn curation explore curated lending markets https://curation.yearn.fi/" href="https://curation.yearn.fi/" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">Curation<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Explore curated lending markets</span></a><a class="menu-card hover-panel" data-search="earn ycrv yearn’s liquid curve locker https://ycrv.yearn.fi/" href="https://ycrv.yearn.fi/" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">yCRV<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Yearn’s liquid Curve locker</span></a><a class="menu-card hover-panel" data-search="earn yyb yearn’s liquid yield basis locker https://yyb.yearn.fi/" href="https://yyb.yearn.fi/" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">yYB<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Yearn’s liquid Yield Basis locker</span></a></div></section><section class="menu-group" data-group="govern" aria-labelledby="menu-group-govern"><div class="menu-group-head"><h3 id="menu-group-govern">Govern</h3><p>Shape and fund the protocol</p></div><div class="menu-links"><a class="menu-card hover-panel" data-search="govern vote &amp; propose review proposals and cast your vote https://dao.yearn.fi/" href="https://dao.yearn.fi/" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">Vote &amp; propose<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Review proposals and cast your vote</span></a><a class="menu-card hover-panel" data-search="govern stake yfi stake with styfi or styfix https://styfi.yearn.fi/" href="https://styfi.yearn.fi/" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">Stake YFI<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Stake with stYFI or stYFIx</span></a><a class="menu-card hover-panel" data-search="govern veyfi &amp; lockers manage locks and legacy positions https://veyfi.yearn.fi/" href="https://veyfi.yearn.fi/" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">veYFI &amp; lockers<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Manage locks and legacy positions</span></a><a class="menu-card hover-panel" data-search="govern treasury explore yearn’s treasury https://treasury.yearn.fi/" href="https://treasury.yearn.fi/" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">Treasury<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Explore Yearn’s treasury</span></a><a class="menu-card hover-panel" data-search="govern team finances teams, budgets and payments https://teams.yearn.fi/" href="https://teams.yearn.fi/" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">Team finances<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Teams, budgets and payments</span></a><a class="menu-card hover-panel" data-search="govern builders’ collective support yearn’s contributors https://ybc.yearn.fi/" href="https://ybc.yearn.fi/" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">Builders’ Collective<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Support Yearn’s contributors</span></a><a class="menu-card hover-panel" data-search="govern governance forum discuss ideas and proposals https://gov.yearn.fi/" href="https://gov.yearn.fi/" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">Governance forum<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Discuss ideas and proposals</span></a></div></section><section class="menu-group" data-group="build" aria-labelledby="menu-group-build"><div class="menu-group-head"><h3 id="menu-group-build">Build</h3><p>Create, integrate and operate</p></div><div class="menu-links"><a class="menu-card hover-panel" data-search="build developer docs build on yearn’s vault framework https://docs.yearn.fi/developers/building-on-yearn" href="https://docs.yearn.fi/developers/building-on-yearn" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">Developer docs<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Build on Yearn’s vault framework</span></a><a class="menu-card hover-panel" data-search="build github explore code and contribute https://github.com/yearn" href="https://github.com/yearn" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">GitHub<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Explore code and contribute</span></a><a class="menu-card hover-panel" data-search="build kalani deploy and manage vaults https://kalani.yearn.fi/" href="https://kalani.yearn.fi/" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">Kalani<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Deploy and manage vaults</span></a><a class="menu-card hover-panel" data-search="build yfactory create vaults for lp tokens https://factory.yearn.fi/" href="https://factory.yearn.fi/" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">yFactory<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Create vaults for LP tokens</span></a><a class="menu-card hover-panel" data-search="build kong query yearn’s vault data https://kong.yearn.fi/" href="https://kong.yearn.fi/" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">Kong<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Query Yearn’s vault data</span></a><a class="menu-card hover-panel" data-search="build rpc cached, read-only chain access https://rpc.yearn.fi/" href="https://rpc.yearn.fi/" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">RPC<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Cached, read-only chain access</span></a></div></section><section class="menu-group" data-group="monitor" aria-labelledby="menu-group-monitor"><div class="menu-group-head"><h3 id="menu-group-monitor">Monitor</h3><p>Check performance and health</p></div><div class="menu-links"><button type="button" class="menu-card hover-panel" data-search="monitor protocol health the dashboard you’re viewing #protocol-health" data-current="true" aria-current="page"><span class="menu-card-title">Protocol health</span><span class="menu-card-description">The dashboard you’re viewing</span></button><a class="menu-card hover-panel" data-search="monitor powerglove explore vault analytics https://powerglove.yearn.fi/" href="https://powerglove.yearn.fi/" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">PowerGlove<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Explore vault analytics</span></a><a class="menu-card hover-panel" data-search="monitor apr oracle inspect projected vault yields https://oracle.yearn.fi/" href="https://oracle.yearn.fi/" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">APR Oracle<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Inspect projected vault yields</span></a><a class="menu-card hover-panel" data-search="monitor system status check services and incidents https://status.yearn.fi/" href="https://status.yearn.fi/" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">System status<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Check services and incidents</span></a><a class="menu-card hover-panel" data-search="monitor artifacts publish and share reports https://artifacts.yearn.dev/" href="https://artifacts.yearn.dev/" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">Artifacts<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Publish and share reports</span></a><a class="menu-card hover-panel" data-search="monitor yearn scan security reviews · sign-in required https://scan.yearn.dev/" href="https://scan.yearn.dev/" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">Yearn Scan<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Security reviews · sign-in required</span></a></div></section><section class="menu-group" data-group="learn" aria-labelledby="menu-group-learn"><div class="menu-group-head"><h3 id="menu-group-learn">Learn</h3><p>Understand the system</p></div><div class="menu-links"><a class="menu-card hover-panel" data-search="learn yearn docs concepts, guides and explanations https://docs.yearn.fi/" href="https://docs.yearn.fi/" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">Yearn docs<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Concepts, guides and explanations</span></a><a class="menu-card hover-panel" data-search="learn blog updates from across yearn https://blog.yearn.fi/" href="https://blog.yearn.fi/" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">Blog<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Updates from across Yearn</span></a><a class="menu-card hover-panel" data-search="learn security &amp; audits review audits and security resources https://docs.yearn.fi/developers/security/" href="https://docs.yearn.fi/developers/security/" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">Security &amp; audits<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Review audits and security resources</span></a><a class="menu-card hover-panel" data-search="learn report a vulnerability yearn’s bug bounty program https://immunefi.com/bug-bounty/yearnfinance" href="https://immunefi.com/bug-bounty/yearnfinance" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">Report a vulnerability<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Yearn’s bug bounty program</span></a></div></section><section class="menu-group" data-group="connect" aria-labelledby="menu-group-connect"><div class="menu-group-head"><h3 id="menu-group-connect">Connect</h3><p>Get help and work together</p></div><div class="menu-links"><a class="menu-card hover-panel" data-search="connect discord support get help from the community https://discord.gg/yearn" href="https://discord.gg/yearn" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">Discord support<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Get help from the community</span></a><a class="menu-card hover-panel" data-search="connect telegram join the conversation https://t.me/yearnfinance" href="https://t.me/yearnfinance" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">Telegram<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Join the conversation</span></a><a class="menu-card hover-panel" data-search="connect yearn on x follow announcements and updates https://x.com/yearnfi" href="https://x.com/yearnfi" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">Yearn on X<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Follow announcements and updates</span></a><a class="menu-card hover-panel" data-search="connect partner with yearn explore working together https://partners.yearn.fi/" href="https://partners.yearn.fi/" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">Partner with Yearn<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Explore working together</span></a><a class="menu-card hover-panel" data-search="connect press kit logos, colors and media assets https://presskit.yearn.fi/" href="https://presskit.yearn.fi/" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">Press Kit<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Logos, colors and media assets</span></a><a class="menu-card hover-panel" data-search="connect yeth recovery manage claims for retired yeth https://yeth.yearn.fi/" href="https://yeth.yearn.fi/" target="_blank" rel="noopener noreferrer"><span class="menu-card-title">yETH recovery<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></span><span class="menu-card-description">Manage claims for retired yETH</span></a></div></section></div></nav>
+ </div>
+</dialog>
+<script>
+// Icon-only device → light → dark control; the whole footer remains the button.
+(() => {
+  const attrs = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
+  const icons = {
+    device: `<svg ${attrs}><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`,
+    light: `<svg ${attrs}><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>`,
+    dark: `<svg ${attrs}><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>`,
+  };
+  const modes = ['device', 'light', 'dark'];
+  const button = document.getElementById('theme-text-toggle');
+  const inner = document.getElementById('theme-toggle-inner');
+  function render() {
+    const mode = YearnTheme.mode;
+    const next = modes[(modes.indexOf(mode) + 1) % modes.length];
+    document.getElementById('theme-icon').innerHTML = icons[mode];
+    button.setAttribute('aria-label', `Theme: ${mode}. Switch to ${next}.`);
+    button.title = `Theme: ${mode}. Switch to ${next}.`;
+    syncDrawerAccent();
+  }
+  button.addEventListener('click', () => {
+    YearnTheme.set(modes[(modes.indexOf(YearnTheme.mode) + 1) % modes.length]);
+    inner.classList.remove('rise-in');
+    void inner.offsetWidth;
+    inner.classList.add('rise-in');
+  });
+  document.addEventListener('yearn-theme-change', render);
+  render();
+})();
+
+</script>
+<script>
+(() => {
+  const menu = document.getElementById('site-menu');
+  const openers = [...document.querySelectorAll('[data-menu-open]')];
+  const filters = [...menu.querySelectorAll('[data-menu-filter]')];
+  const groups = [...menu.querySelectorAll('.menu-group')];
+  const cards = [...menu.querySelectorAll('.menu-card')];
+  const grid = document.getElementById('menu-groups');
+  let category = 'monitor';
+  let returnFocus;
+  let previousOverflow;
+  const MENU_HASH = '#open-menu';
+  let returningThroughHistory = false;
+  function filter() {
+    for (const group of groups) {
+      const matches = category === 'all' || category === group.dataset.group;
+      for (const card of group.querySelectorAll('.menu-card')) {
+        card.hidden = !matches;
+      }
+      group.hidden = !matches;
+    }
+    grid.classList.toggle('is-filtered', category !== 'all');
+    for (const button of filters) button.setAttribute('aria-pressed', String(button.dataset.menuFilter === category));
+    menu.querySelector('.menu-scroll').scrollTop = 0;
+  }
+  function show() {
+    if (menu.open) return;
+    returnFocus ||= openers[0];
+    if (current >= 0) close();
+    previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    category = 'monitor'; filter();
+    menu.showModal();
+    openers.forEach(button => button.setAttribute('aria-expanded', 'true'));
+    menu.querySelector('[aria-current="page"]').focus({preventScroll:true});
+  }
+  function syncMenuFromUrl() {
+    returningThroughHistory = false;
+    if (location.hash === MENU_HASH) show();
+    else if (menu.open) menu.close();
+  }
+  function openMenu(event) {
+    if (returningThroughHistory) return;
+    returnFocus = event.currentTarget;
+    if (location.hash !== MENU_HASH) {
+      history.pushState({...history.state, yearnMenuEntry: true}, '', MENU_HASH);
+    }
+    syncMenuFromUrl();
+  }
+  function hide() {
+    if (!menu.open || returningThroughHistory) return;
+    if (location.hash === MENU_HASH) {
+      if (history.state?.yearnMenuEntry === true) {
+        returningThroughHistory = true;
+        history.back();
+      } else {
+        // A shared/bookmarked menu URL has no app-created entry to go back to.
+        history.replaceState(history.state, '', location.pathname + location.search);
+      }
+    }
+    menu.close();
+  }
+  window.addEventListener('popstate', syncMenuFromUrl);
+  window.addEventListener('hashchange', syncMenuFromUrl);
+  window.addEventListener('pageshow', syncMenuFromUrl);
+  menu.addEventListener('cancel', event => {
+    event.preventDefault();
+    hide();
+  });
+  openers.forEach(button => button.addEventListener('click', openMenu));
+  menu.querySelectorAll('[data-menu-close]').forEach(button => button.addEventListener('click', hide));
+  // Every noninteractive part of the full-screen menu is a dismissal target.
+  menu.addEventListener('click', event => {
+    if (!event.target.closest('a, button')) hide();
+  });
+  menu.addEventListener('close', () => {
+    document.body.style.overflow = previousOverflow;
+    openers.forEach(button => button.setAttribute('aria-expanded', 'false'));
+    returnFocus?.focus({preventScroll:true});
+  });
+  // Keep native dialog background inertness. Wrap Tab locally
+  // so the last link returns to the first control instead of browser chrome.
+  menu.addEventListener('keydown', event => {
+    if (event.key === 'Tab') {
+      const focusable = [...menu.querySelectorAll('a[href],button,input')]
+        .filter(element => !element.disabled && element.getClientRects().length);
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault(); last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault(); first.focus();
+      }
+    }
+  });
+  filters.forEach(button => button.addEventListener('click', () => {
+    category = button.dataset.menuFilter; filter();
+  }));
+  // The active dashboard card is a return action; external cards remain real links.
+  cards.filter(card => card.dataset.current === 'true').forEach(card => card.addEventListener('click', hide));
+  filter();
+  syncMenuFromUrl();
+})();
+
+</script>
+</body>
+</html>
